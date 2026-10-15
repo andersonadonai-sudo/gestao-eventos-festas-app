@@ -310,9 +310,13 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
       </div>
     </div>
     <div class="card">
+      <h3>🔄 Backups automáticos <small>guarda os 5 mais recentes neste aparelho</small></h3>
+      <div id="bkpList"></div>
+    </div>
+    <div class="card">
       <h3>Dados</h3>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" onclick="bkpJson()">💾 Backup JSON</button>
+        <button class="btn" onclick="bkpJson()">💾 Baixar backup agora</button>
         <div style="display:flex;align-items:center"><input type="file" id="impJson" accept=".json" onchange="restJson(this)"></div>
         <button class="btn" onclick="limparExemplos()">🧹 Remover dados de exemplo</button>
         <button class="btn r" onclick="zerarTudo()">🗑️ Zerar tudo</button>
@@ -393,7 +397,50 @@ function initTheme(){const t=localStorage.getItem('gestao_festas_tema');if(t&&TH
 const LS='gestao_festas_v1';
 let DB={eventos:[],caixa:[],seq:1,cfg:{empresa:'',topico:''},lastSeen:0};
 function load(){try{const r=localStorage.getItem(LS);if(r){const d=JSON.parse(r);DB={...{eventos:[],caixa:[],seq:1,cfg:{}},...d};}}catch(e){}}
-function save(){localStorage.setItem(LS,JSON.stringify(DB));pubDB();}
+function save(){snapAuto();localStorage.setItem(LS,JSON.stringify(DB));pubDB();}
+/* ============ BACKUP AUTOMÁTICO (snapshots rotativos) ============ */
+function snapAuto(){
+  try{
+    DB.bkps=DB.bkps||[];
+    const last=DB.bkps[0];
+    const agora=Date.now();
+    const temMudanca=JSON.stringify({e:DB.eventos,c:DB.caixa})!==JSON.stringify({e:(last&&last._e)||null,c:(last&&last._c)||null});
+    if(last&&agora-last.t<6*3600e3)return; // no máx 1 snapshot a cada 6h
+    if(!last||DB.eventos.length||DB.caixa.length){
+      DB.bkps.unshift({t:agora,ev:DB.eventos.length,cx:DB.caixa.length,
+        db:JSON.stringify({eventos:DB.eventos,caixa:DB.caixa,cfg:DB.cfg,seq:DB.seq})});
+      if(DB.bkps.length>5)DB.bkps.length=5;
+    }
+  }catch(e){}
+}
+function renderBkps(){
+  const el=document.getElementById('bkpList');if(!el)return;
+  DB.bkps=DB.bkps||[];
+  if(!DB.bkps.length){el.innerHTML='<div class="empty">Nenhum backup automático ainda — acontece sozinho (a cada 6h com mudanças, guarda os 5 mais recentes)</div>';return}
+  let h='<table><tr><th>Quando</th><th>Conteúdo</th><th></th></tr>';
+  DB.bkps.forEach((b,i)=>{
+    const d=new Date(b.t);
+    h+=`<tr><td><b>${d.toLocaleDateString('pt-BR')}</b> ${d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</td>
+    <td>${b.ev} evento(s) · ${b.cx} lançamento(s)</td>
+    <td style="white-space:nowrap"><button class="btn sm g" onclick="restBkp(${i})">↩️ Restaurar</button> <button class="btn sm" onclick="dlBkp(${i})">⬇️</button> <button class="btn sm r" onclick="delBkp(${i})">✕</button></td></tr>`;
+  });
+  el.innerHTML=h+'</table>';
+}
+function restBkp(i){
+  const b=DB.bkps[i];if(!b)return;
+  if(!confirm('Restaurar o backup de '+new Date(b.t).toLocaleString('pt-BR')+'?\nOs dados atuais serão substituídos.'))return;
+  const d=JSON.parse(b.db);
+  DB.eventos=d.eventos||[];DB.caixa=d.caixa||[];DB.cfg=d.cfg||{};DB.seq=d.seq||1;
+  localStorage.setItem(LS,JSON.stringify(DB));renderAll();
+  toast('Backup restaurado','ok');
+}
+function dlBkp(i){
+  const b=DB.bkps[i];if(!b)return;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([b.db],{type:'application/json'}));
+  a.download='backup-festas-'+new Date(b.t).toISOString().slice(0,16).replace(/[:T]/g,'-')+'.json';a.click();
+}
+function delBkp(i){if(!confirm('Excluir este backup?'))return;DB.bkps.splice(i,1);localStorage.setItem(LS,JSON.stringify(DB));renderBkps()}
 const MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const CATEGORIAS=['RECEITA DE EVENTO','RECEITA DE USO DE SALÃO','RECEITA DE SOM/LUZ','RECEITA DE BUFFET','OUTRA RECEITA','DESPESA COM EVENTO','DESPESA OPERACIONAL','ALUGUEL','SALÁRIOS','ENERGIA/ÁGUA/TELEFONE','FORNECEDORES','OUTRA DESPESA'];
 const CORES=['#7c5cff','#d4af37','#2ecc71','#3d8bfd','#ff9f43','#e05fa8','#26c6da','#ff5d6c'];
@@ -937,24 +984,33 @@ function impCaixa(inp){
 }
 function expXlsx(){
   calcEventos();
-  // RESUMO
-  const res=[['DATA ASS. CONTRATO','DATA DA FESTA','CLIENTE','LOCAL DA FESTA','TIPO FESTA','REGISTRO','VR. TOTAL DA FESTA','VR. JÁ RECEBIDO','FREQUENCIA DE RECEBIMENTO','FORMA DE RECEBIMENTO','FALTA RECEBER']];
+  // PLANILHA RESUMO — mesma estrutura da original (título + cabeçalho na 2ª linha)
+  const res=[['','PROGRAMAÇÃO DE RECEBIMENTOS - FESTAS'],
+    ['DATA ASS. CONTRATO','DATA DA FESTA','CLIENTE','LOCAL DA FESTA','TIPO FESTA','REGISTRO','VR. TOTAL DA FESTA','VR. JÁ RECEBIDO','FREQUENCIA DE RECEBIMENTO','FORMA DE RECEBIMENTO','FALTA RECEBER']];
   DB.eventos.forEach(e=>res.push([e.contrato,e.festa,e.cli,e.local||'',e.tipo||'',e.reg,e.val,e.rec,e.freq||'',e.forma||'',e.falta]));
-  // FLUXO
-  const flu=[['DATA ASS. CONTRATO','DATA DA FESTA','CLIENTE','LOCAL','TIPO','REGISTRO','VR. TOTAL','VR. RECEBIDO','FALTA','RECEBIMENTOS NO CAIXA']];
+  // PLANILHA FLUXO RECEBIM — com as parciais reais do caixa
+  const flu=[['','PROGRAMAÇÃO DE RECEBIMENTOS - FESTAS'],
+    ['DATA ASS. CONTRATO','DATA DA FESTA','CLIENTE','LOCAL','TIPO','REGISTRO','VR. TOTAL','VR. RECEBIDO','FALTA','PARCIAL 1','FORMA','DATA','PARCIAL 2','FORMA','DATA','PARCIAL 3','FORMA','DATA','PARCIAL 4','FORMA','DATA','PARCIAL 5','FORMA','DATA','PARCIAL 6','FORMA','DATA']];
   DB.eventos.forEach(e=>{
-    const pgs=DB.caixa.filter(c=>c.evId===e.id&&c.dc==='C');
-    flu.push([e.contrato,e.festa,e.cli,e.local||'',e.tipo||'',e.reg,e.val,e.rec,e.falta,pgs.map(p=>fmtD(p.data)+' '+money(p.val)+' ('+(p.forma||'—')+')').join(' | ')]);
+    const pgs=DB.caixa.filter(c=>c.evId===e.id&&c.dc==='C').sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+    const row=[e.contrato,e.festa,e.cli,e.local||'',e.tipo||'',e.reg,e.val,e.rec,e.falta];
+    for(let i=0;i<6;i++){const p=pgs[i];row.push(p?p.val:'',p?(p.forma||''):'',p?p.data:'')}
+    flu.push(row);
   });
-  // CAIXA
-  const cx=[['Data','Descrição','Categoria','Tipo Festa','Registro','D ou C','Valor']];
-  DB.caixa.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||'')).forEach(c=>cx.push([c.data,c.desc,c.cat,c.tipo||'',c.reg||'',c.dc,c.val]));
+  // Controle de Caixa — mesma coluna da original, com Saldo calculado
+  const cx=[['Data','Descrição','Categoria','Tipo Festa','Registro','D ou C','Valor','Saldo']];
+  let s=0;
+  DB.caixa.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||'')).forEach(c=>{
+    s+=c.dc==='D'?-(+c.val||0):(+c.val||0);
+    cx.push([c.data,c.desc,c.cat,c.tipo||'',c.reg||'',c.dc,c.val,s]);
+  });
+  cx.push(['','Observação:','Digite o valor sempre positivo na coluna Valor. Informe D para débito ou C para crédito; o Saldo calcula o efeito acumulado.','','','','','','']);
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(res),'RESUMO');
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(flu),'FLUXO RECEBIM');
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cx),'CAIXA');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(res),'PLANILHA RESUMO');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(flu),'PLANILHA FLUXO RECEBIM');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cx),'Controle de Caixa');
   XLSX.writeFile(wb,(DB.cfg.empresa||'gestao-eventos')+'-'+today()+'.xlsx');
-  toast('Planilha exportada','ok');
+  toast('Planilha exportada no formato das originais','ok');
 }
 
 /* ================= BACKUP / JSON ================= */
@@ -1035,7 +1091,7 @@ function renderAll(){
   calcEventos();
   kpis();chartMeses();donutForma();proxEventos();tblTipos();alertas();
   tblEventos();tblCaixa();
-  renderAgenda();relatorios();
+  renderAgenda();relatorios();renderBkps();
   // datalists
   document.getElementById('dlReg').innerHTML=DB.eventos.map(e=>`<option value="${esc(e.reg)}">${esc(e.cli)} — ${fmtD(e.festa)} — falta ${money(e.falta)}</option>`).join('');
   const tipos=[...new Set(DB.eventos.map(e=>e.tipo).filter(Boolean))];
