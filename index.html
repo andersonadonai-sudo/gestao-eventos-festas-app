@@ -36,11 +36,11 @@ h2 .btn{margin-left:auto}
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--ac,var(--vio))}
 .kpi .lb{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
 .kpi .vl{font-size:20px;font-weight:800;margin-top:6px;white-space:nowrap}
-.kpi .xs{font-size:11px;color:var(--mut);margin-top:3px}
+.kpi .xs{font-size:13px;color:var(--mut);margin-top:4px}
 .grid2{display:grid;grid-template-columns:2fr 1fr;gap:14px}
 .grid3{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .card h3{font-size:17px;margin-bottom:12px;color:var(--tx)}
-.card h3 small{color:var(--mut);font-weight:400;font-size:11px;margin-left:6px}
+.card h3 small{color:var(--mut);font-weight:400;font-size:13px;margin-left:6px}
 table{width:100%;border-collapse:collapse;font-size:15px}
 th{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.4px;text-align:left;padding:10px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
 td{padding:12px 9px;border-bottom:1px solid rgba(42,50,69,.5);white-space:nowrap}
@@ -61,11 +61,14 @@ tr:last-child td{border-bottom:none}
 nav button{background:linear-gradient(135deg,#242c40,#1b2233);border:1px solid rgba(255,255,255,.06);color:var(--mut);font-size:15px;font-weight:700;padding:11px 18px;border-radius:12px;cursor:pointer;white-space:nowrap;font-family:inherit;transition:all .2s;box-shadow:0 2px 6px rgba(0,0,0,.3)}
 nav button.on{background:linear-gradient(135deg,#8f6bff,#5b3fd6);color:#fff;box-shadow:0 4px 16px rgba(124,92,255,.45)}
 input,select,textarea{background:var(--card2);border:1px solid var(--line);color:var(--tx);border-radius:12px;padding:13px 14px;font-size:16px;font-family:inherit;width:100%;outline:none}
+input[type=file]{padding:10px 12px;color:var(--tx);font-size:15px}
+input[type=file]::file-selector-button{background:linear-gradient(135deg,#8f6bff,#5b3fd6);color:#fff;border:none;border-radius:10px;padding:10px 18px;margin-right:12px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;box-shadow:0 3px 10px rgba(124,92,255,.35)}
+input[type=file]::file-selector-button:hover{filter:brightness(1.15)}
 input:focus,select:focus{border-color:var(--vio)}
 label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
 .frow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .frow>div{flex:1;min-width:130px}
-.badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700}
+.badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}
 .b-grn{background:rgba(46,204,113,.15);color:var(--grn)}
 .b-red{background:rgba(255,93,108,.15);color:var(--red)}
 .b-org{background:rgba(255,159,67,.15);color:var(--org)}
@@ -80,9 +83,9 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
 .bar{width:100%;border-radius:6px 6px 0 0;min-height:2px;position:relative;transition:height .4s}
 .bar.real{background:linear-gradient(180deg,#9d7dff,var(--vio))}
 .bar.prev{background:repeating-linear-gradient(45deg,rgba(124,92,255,.35),rgba(124,92,255,.35) 4px,rgba(124,92,255,.12) 4px,rgba(124,92,255,.12) 8px)}
-.bar-lb{font-size:10px;color:var(--mut);white-space:nowrap}
-.bar-vl{font-size:10px;color:var(--tx);font-weight:700}
-.legend{display:flex;gap:14px;font-size:11px;color:var(--mut);margin-top:8px;flex-wrap:wrap}
+.bar-lb{font-size:12px;color:var(--mut);white-space:nowrap}
+.bar-vl{font-size:12px;color:var(--tx);font-weight:700}
+.legend{display:flex;gap:14px;font-size:13px;color:var(--mut);margin-top:8px;flex-wrap:wrap}
 .legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
 .donut-wrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .dlist{flex:1;min-width:150px}
@@ -107,8 +110,8 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--line);color:var(--tx);padding:12px 20px;border-radius:12px;font-size:13px;z-index:200;box-shadow:0 8px 30px rgba(0,0,0,.5);display:none;max-width:90vw;text-align:center}
 .toast.err{border-color:var(--red);color:#ffb3ba}
 .toast.ok{border-color:var(--grn)}
-.empty{text-align:center;color:var(--mut);padding:26px 10px;font-size:13px}
-.reg-hint{background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.3);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--gold);margin-bottom:10px;display:none}
+.empty{text-align:center;color:var(--mut);padding:26px 10px;font-size:15px;line-height:1.5}
+.reg-hint{background:rgba(212,175,55,.1);border:1px solid rgba(212,175,55,.4);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--gold);margin-bottom:10px;display:none;line-height:1.5}
 .prog{height:7px;background:var(--card2);border-radius:99px;overflow:hidden;min-width:70px}
 .prog i{display:block;height:100%;background:linear-gradient(90deg,var(--vio),var(--grn));border-radius:99px}
 @media(max-width:900px){
@@ -209,7 +212,7 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
       <div id="cRegBox" style="display:none">
         <div class="frow">
           <div style="max-width:220px"><label>Nº Registro do evento</label><input id="cReg" list="dlReg" placeholder="Ex.: EV-0001" oninput="regChange()"></div>
-          <div style="flex:2;display:flex;align-items:flex-end"><div id="regInfo" style="font-size:12px;color:var(--mut);padding-bottom:10px"></div></div>
+          <div style="flex:2;display:flex;align-items:flex-end"><div id="regInfo" style="font-size:14px;color:var(--mut);padding-bottom:10px;line-height:1.4"></div></div>
         </div>
       </div>
       <datalist id="dlReg"></datalist>
@@ -231,7 +234,7 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
         <button class="btn" onclick="mNav(-1)">‹</button>
         <b id="agLabel"></b>
         <button class="btn" onclick="mNav(1)">›</button>
-        <span style="margin-left:auto;font-size:12px;color:var(--mut)" id="agResumo"></span>
+        <span style="margin-left:auto;font-size:14px;color:var(--mut);font-weight:600" id="agResumo"></span>
       </div>
       <div class="cal" id="calGrid"></div>
     </div>
@@ -293,7 +296,7 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
         <div style="max-width:220px"><label>Código da nuvem (sync)</label><input id="cfgTopico" placeholder="ex.: festas-abc123"></div>
       </div>
       <button class="btn p" onclick="salvarCfg()">Salvar</button>
-      <div style="font-size:12px;color:var(--mut);margin-top:8px">O código da nuvem sincroniza os dados entre aparelhos (dono ↔ consultor). Use o <b>mesmo código</b> nos dois aparelhos. Precisa do app ntfy ou internet no navegador.</div>
+      <div style="font-size:14px;color:var(--mut);margin-top:8px;line-height:1.5">O código da nuvem sincroniza os dados entre aparelhos (dono ↔ consultor). Use o <b>mesmo código</b> nos dois aparelhos. Precisa do app ntfy ou internet no navegador.</div>
     </div>
     <div class="card">
       <h3>Planilhas Excel</h3>
@@ -303,14 +306,14 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
         <button class="btn g" onclick="expXlsx()">⬇️ Exportar planilha integrada (.xlsx)</button>
-        <span style="font-size:12px;color:var(--mut);align-self:center">Gera RESUMO + FLUXO RECEBIM + CAIXA atualizados</span>
+        <span style="font-size:14px;color:var(--mut);align-self:center;font-weight:600">Gera RESUMO + FLUXO RECEBIM + CAIXA atualizados</span>
       </div>
     </div>
     <div class="card">
       <h3>Dados</h3>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn" onclick="bkpJson()">💾 Backup JSON</button>
-        <div><input type="file" id="impJson" accept=".json" onchange="restJson(this)" style="padding:8px"></div>
+        <div style="display:flex;align-items:center"><input type="file" id="impJson" accept=".json" onchange="restJson(this)"></div>
         <button class="btn" onclick="limparExemplos()">🧹 Remover dados de exemplo</button>
         <button class="btn r" onclick="zerarTudo()">🗑️ Zerar tudo</button>
       </div>
@@ -369,11 +372,11 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
 <script>
 /* ================= TEMA ================= */
 let THEMES={
-  roxo:{bg:'#0e1118',card:'#171b26',card2:'#1e2432',line:'#2a3245',tx:'#e8ecf5',mut:'#8b93a7',ac:'#7c5cff',ac2:'#5b3fd6'},
-  dourado:{bg:'#141210',card:'#1d1a15',card2:'#26221a',line:'#3a3324',tx:'#f5eeda',mut:'#a89e85',ac:'#d4af37',ac2:'#9c7d1e'},
-  esmeralda:{bg:'#0c1512',card:'#14211c',card2:'#1b2d26',line:'#2a4238',tx:'#e5f5ec',mut:'#8aab9c',ac:'#2ecc71',ac2:'#1e9e5a'},
-  oceano:{bg:'#0a1220',card:'#122033',card2:'#182a42',line:'#24405e',tx:'#e3eefc',mut:'#87a3c4',ac:'#3d8bfd',ac2:'#2458b8'},
-  rubi:{bg:'#170d12',card:'#221520',card2:'#2d1c2a',line:'#41283c',tx:'#f8e8f0',mut:'#b08ca0',ac:'#e05fa8',ac2:'#a83a78'},
+  roxo:{bg:'#0e1118',card:'#171b26',card2:'#1e2432',line:'#2a3245',tx:'#e8ecf5',mut:'#a8b3c9',ac:'#7c5cff',ac2:'#5b3fd6'},
+  dourado:{bg:'#141210',card:'#1d1a15',card2:'#26221a',line:'#3a3324',tx:'#f5eeda',mut:'#c9bd9c',ac:'#d4af37',ac2:'#9c7d1e'},
+  esmeralda:{bg:'#0c1512',card:'#14211c',card2:'#1b2d26',line:'#2a4238',tx:'#e5f5ec',mut:'#a9cbb9',ac:'#2ecc71',ac2:'#1e9e5a'},
+  oceano:{bg:'#0a1220',card:'#122033',card2:'#182a42',line:'#24405e',tx:'#e3eefc',mut:'#a8c0e0',ac:'#3d8bfd',ac2:'#2458b8'},
+  rubi:{bg:'#170d12',card:'#221520',card2:'#2d1c2a',line:'#41283c',tx:'#f8e8f0',mut:'#cfa8bd',ac:'#e05fa8',ac2:'#a83a78'},
   claro:{bg:'#f2f4f8',card:'#ffffff',card2:'#eef1f6',line:'#d8dee9',tx:'#1a2233',mut:'#6a7386',ac:'#6c4cff',ac2:'#4a2fd6'}
 };
 let THEME='roxo';
