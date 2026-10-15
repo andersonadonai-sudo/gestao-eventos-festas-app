@@ -301,10 +301,10 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
       <h3>Empresa</h3>
       <div class="frow">
         <div><label>Nome da empresa</label><input id="cfgEmpresa" placeholder="Nome do cliente / empresa de festas"></div>
-        <div style="max-width:220px"><label>Código da nuvem (sync) ★ principal</label><input id="cfgTopico" placeholder="ex.: festas-abc123"></div>
+        <div style="max-width:220px"><label>Código da nuvem (sync) ★ principal</label><input id="cfgTopico" placeholder="casaencantada2026"></div>
       </div>
       <button class="btn p" onclick="salvarCfg()">Salvar</button>
-      <div style="font-size:14px;color:var(--grn);margin-top:8px;font-weight:700">✅ RECOMENDADO: é só isso! Dono e consultor usam o MESMO código (ex.: casaencantada2026) e tudo sincroniza sozinho entre os aparelhos — sem planilha, sem cadastro, sem nada.</div>
+      <div style="font-size:14px;color:var(--grn);margin-top:8px;font-weight:700">✅ JÁ ESTÁ CONFIGURADO com o código <b>casaencantada2026</b> — dono e consultor só abrem o link e tudo aparece nos dois. Se preferir outro código, troque aqui (e use o mesmo em todos os aparelhos).</div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
         <label>Planilha Google (link /exec do Apps Script)</label>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
@@ -1222,7 +1222,8 @@ function renderAll(){
 }
 window.addEventListener('DOMContentLoaded',()=>{
   load();
-  TOPIC=DB.cfg.topico||'';
+  TOPIC=DB.cfg.topico||'casaencantada2026';
+  DB.cfg.topico=TOPIC;
   document.getElementById('cfgEmpresa').value=DB.cfg.empresa||'';
   document.getElementById('cfgTopico').value=TOPIC;
   SHEET=DB.cfg.sheet||'';
