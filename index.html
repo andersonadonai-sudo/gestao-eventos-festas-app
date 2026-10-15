@@ -62,8 +62,16 @@ nav button{background:linear-gradient(135deg,#242c40,#1b2233);border:1px solid r
 nav button.on{background:linear-gradient(135deg,#8f6bff,#5b3fd6);color:#fff;box-shadow:0 4px 16px rgba(124,92,255,.45)}
 input,select,textarea{background:var(--card2);border:1px solid var(--line);color:var(--tx);border-radius:12px;padding:13px 14px;font-size:16px;font-family:inherit;width:100%;outline:none}
 input[type=file]{padding:10px 12px;color:var(--tx);font-size:15px}
-input[type=file]::file-selector-button{background:linear-gradient(135deg,#8f6bff,#5b3fd6);color:#fff;border:none;border-radius:10px;padding:10px 18px;margin-right:12px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;box-shadow:0 3px 10px rgba(124,92,255,.35)}
-input[type=file]::file-selector-button:hover{filter:brightness(1.15)}
+input[type=file]{display:none}
+.fup{display:flex;flex-direction:column;gap:8px;background:linear-gradient(135deg,rgba(124,92,255,.12),rgba(124,92,255,.04));border:2px dashed rgba(124,92,255,.45);border-radius:16px;padding:18px 16px;cursor:pointer;transition:all .2s;text-align:center;min-height:96px;justify-content:center}
+.fup:hover{background:linear-gradient(135deg,rgba(124,92,255,.2),rgba(124,92,255,.08));border-color:var(--vio);transform:translateY(-2px)}
+.fup .fic{font-size:26px;line-height:1}
+.fup .ft{font-size:14px;font-weight:800;color:var(--tx)}
+.fup .fs{font-size:12px;color:var(--mut)}
+.fup .fbtn{margin-top:4px;background:linear-gradient(135deg,#8f6bff,#5b3fd6);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;font-family:inherit;box-shadow:0 3px 10px rgba(124,92,255,.4);display:inline-block}
+.card.acc{background:linear-gradient(160deg,#1c2130,#171b26 60%);border:1px solid rgba(124,92,255,.25)}
+.card.acc .btn.p{width:100%;padding:16px;font-size:16px;border-radius:14px}
+.card.acc .btn.g{width:100%;padding:16px;font-size:16px;border-radius:14px}
 input:focus,select:focus{border-color:var(--vio)}
 label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
 .frow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
@@ -307,27 +315,43 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
       </div>
       <div style="font-size:14px;color:var(--mut);margin-top:8px;line-height:1.5">O código da nuvem sincroniza os dados entre aparelhos (dono ↔ consultor). Use o <b>mesmo código</b> nos dois aparelhos. Precisa do app ntfy ou internet no navegador.</div>
     </div>
-    <div class="card">
-      <h3>Planilhas Excel</h3>
+    <div class="card acc">
+      <h3>📥 Importar / Exportar planilhas</h3>
       <div class="frow">
-        <div><label>Importar planilha de eventos (.xlsx)</label><input type="file" id="impEv" accept=".xlsx,.xls" onchange="impEventos(this)"></div>
-        <div><label>Importar caixa simples (.xlsx)</label><input type="file" id="impCx" accept=".xlsx,.xls" onchange="impCaixa(this)"></div>
+        <div>
+          <label for="impEv" class="fup">
+            <span class="fic">📊</span>
+            <span class="ft">Importar planilha de EVENTOS</span>
+            <span class="fs">PLANILHA RESUMO (.xlsx)</span>
+            <span class="fbtn">Escolher arquivo</span>
+          </label>
+          <input type="file" id="impEv" accept=".xlsx,.xls" onchange="impEventos(this)">
+        </div>
+        <div>
+          <label for="impCx" class="fup">
+            <span class="fic">💰</span>
+            <span class="ft">Importar CONTROLE DE CAIXA</span>
+            <span class="fs">caixa simples (.xlsx)</span>
+            <span class="fbtn">Escolher arquivo</span>
+          </label>
+          <input type="file" id="impCx" accept=".xlsx,.xls" onchange="impCaixa(this)">
+        </div>
       </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
-        <button class="btn g" onclick="expXlsx()">⬇️ Exportar planilha integrada (.xlsx)</button>
-        <span style="font-size:14px;color:var(--mut);align-self:center;font-weight:600">Gera RESUMO + FLUXO RECEBIM + CAIXA atualizados</span>
+      <div style="margin-top:14px">
+        <button class="btn g" onclick="expXlsx()">⬇️ Exportar planilha integrada (.xlsx) — RESUMO + FLUXO + CAIXA</button>
       </div>
     </div>
     <div class="card">
       <h3>🔄 Backups automáticos <small>guarda os 5 mais recentes neste aparelho</small></h3>
       <div id="bkpList"></div>
     </div>
-    <div class="card">
-      <h3>Dados</h3>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" onclick="bkpJson()">💾 Baixar backup agora</button>
-        <div style="display:flex;align-items:center"><input type="file" id="impJson" accept=".json" onchange="restJson(this)"></div>
-        <button class="btn" onclick="limparExemplos()">🧹 Remover dados de exemplo</button>
+    <div class="card acc">
+      <h3>💾 Backup & dados</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button class="btn p" onclick="bkpJson()">💾 Baixar backup agora</button>
+        <label for="impJson" class="btn" style="justify-content:center;margin:0">📂 Restaurar backup</label>
+        <input type="file" id="impJson" accept=".json" onchange="restJson(this)">
+        <button class="btn" onclick="limparExemplos()">🧹 Remover exemplos</button>
         <button class="btn r" onclick="zerarTudo()">🗑️ Zerar tudo</button>
       </div>
     </div>
