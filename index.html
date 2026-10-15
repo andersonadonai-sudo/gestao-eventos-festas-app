@@ -344,3 +344,690 @@ label{font-size:11px;color:var(--mut);display:block;margin-bottom:4px;text-trans
 <div class="toast" id="toast"></div>
 </body>
 </html>
+<script>
+/* ================= ESTADO ================= */
+const LS='gestao_festas_v1';
+let DB={eventos:[],caixa:[],seq:1,cfg:{empresa:'',topico:''},lastSeen:0};
+function load(){try{const r=localStorage.getItem(LS);if(r){const d=JSON.parse(r);DB={...{eventos:[],caixa:[],seq:1,cfg:{}},...d};}}catch(e){}}
+function save(){localStorage.setItem(LS,JSON.stringify(DB));pubDB();}
+const MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const CATEGORIAS=['RECEITA DE EVENTO','RECEITA DE USO DE SALÃO','RECEITA DE SOM/LUZ','RECEITA DE BUFFET','OUTRA RECEITA','DESPESA COM EVENTO','DESPESA OPERACIONAL','ALUGUEL','SALÁRIOS','ENERGIA/ÁGUA/TELEFONE','FORNECEDORES','OUTRA DESPESA'];
+const CORES=['#7c5cff','#d4af37','#2ecc71','#3d8bfd','#ff9f43','#e05fa8','#26c6da','#ff5d6c'];
+function money(v){return (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}
+function fmtD(s){if(!s)return '—';const p=String(s).slice(0,10).split('-');return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:s}
+function today(){return new Date().toISOString().slice(0,10)}
+function toast(m,t){const e=document.getElementById('toast');e.textContent=m;e.className='toast '+(t||'');e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',3200)}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+
+/* ================= REGISTRO EV-XXXX ================= */
+function nextReg(){
+  let mx=0;
+  DB.eventos.forEach(e=>{const m=/EV-(\d+)/.exec(e.reg||'');if(m)mx=Math.max(mx,parseInt(m[1]))});
+  return 'EV-'+String(mx+1).padStart(4,'0');
+}
+function evByReg(r){r=String(r||'').trim().toUpperCase();return DB.eventos.find(e=>String(e.reg).trim().toUpperCase()===r)}
+
+/* ================= RECEBIDO POR EVENTO (do caixa) ================= */
+function recebidoEv(eid){
+  let tot=0;
+  DB.caixa.forEach(c=>{
+    if(c.cat==='RECEITA DE EVENTO'&&c.evId===eid&&c.dc==='C')tot+=(+c.val||0);
+  });
+  return tot;
+}
+function calcEventos(){
+  DB.eventos.forEach(e=>{
+    e.rec=recebidoEv(e.id);
+    e.falta=Math.max(0,(+e.val||0)-e.rec);
+  });
+}
+
+/* ================= DASHBOARD ================= */
+function kpis(){
+  const recEv=DB.caixa.filter(c=>c.cat==='RECEITA DE EVENTO'&&c.dc==='C').reduce((a,c)=>a+(+c.val||0),0);
+  const despesas=DB.caixa.filter(c=>c.dc==='D').reduce((a,c)=>a+(+c.val||0),0);
+  const outrasRec=DB.caixa.filter(c=>c.dc==='C'&&c.cat!=='RECEITA DE EVENTO').reduce((a,c)=>a+(+c.val||0),0);
+  const saldo=outrasRec+recEv-despesas;
+  const totalContr=DB.eventos.reduce((a,e)=>a+(+e.val||0),0);
+  const totalRec=DB.eventos.reduce((a,e)=>a+(e.rec||0),0);
+  const falta=totalContr-totalRec;
+  const hoje=today();
+  const prox=DB.eventos.filter(e=>e.festa>=hoje).length;
+  const mesAtual=new Date().toISOString().slice(0,7);
+  const evMes=DB.eventos.filter(e=>(e.festa||'').slice(0,7)===mesAtual).length;
+  const K=[
+    {lb:'Saldo do caixa',vl:money(saldo),ac:saldo>=0?'var(--grn)':'var(--red)'},
+    {lb:'Contratado (eventos)',vl:money(totalContr),ac:'var(--vio)',xs:DB.eventos.length+' eventos'},
+    {lb:'Já recebido',vl:money(totalRec),ac:'var(--blu)'},
+    {lb:'Falta receber',vl:money(Math.max(0,falta)),ac:'var(--org)'},
+    {lb:'Despesas (caixa)',vl:money(despesas),ac:'var(--red)'},
+    {lb:'Eventos futuros',vl:prox,xs:evMes+' neste mês',ac:'var(--gold)'}
+  ];
+  document.getElementById('kpis').innerHTML=K.map(k=>`<div class="kpi" style="--ac:${k.ac}"><div class="lb">${k.lb}</div><div class="vl">${k.vl}</div><div class="xs">${k.xs||''}</div></div>`).join('');
+  document.getElementById('tSaldo').textContent=money(saldo);
+}
+function monthKey(d){return String(d||'').slice(0,7)}
+function addMonths(k,n){const[y,m]=k.split('-').map(Number);const d=new Date(y,m-1+n,1);return d.toISOString().slice(0,7)}
+function monthsRange(){
+  const ks=DB.caixa.filter(c=>c.data).map(c=>monthKey(c.data))
+    .concat(DB.eventos.filter(e=>e.festa).map(e=>monthKey(e.festa)));
+  if(!ks.length)ks.push(new Date().toISOString().slice(0,7));
+  let min=ks.slice().sort()[0],max=ks.slice().sort().pop();
+  let cur=min,out=[];
+  let guard=0;
+  while(cur<=max&&guard<120){out.push(cur);cur=addMonths(cur,1);guard++}
+  return out;
+}
+/* previsão de parcelas futuras por frequência */
+function previsao(){
+  const out=[]; // {mes, val, ev}
+  DB.eventos.forEach(e=>{
+    const falta=Math.max(0,(+e.val||0)-(e.rec||0));
+    if(falta<=0.005||!e.festa)return;
+    const freq=(e.freq||'MENSAL').toUpperCase();
+    let step=1;
+    if(freq.includes('15'))step=.5;else if(freq.includes('SEM'))step=.25;else if(freq.includes('ÚNIC')||freq.includes('UNIC'))step=0;
+    // âncora: último recebimento ou contrato
+    const pgs=DB.caixa.filter(c=>c.evId===e.id&&c.dc==='C').map(c=>c.data).sort();
+    const anchor=pgs.length?pgs[pgs.length-1]:(e.contrato||e.festa);
+    if(!anchor)return;
+    let d=new Date(anchor.slice(0,10)+'T12:00:00');
+    const base=new Date(d);
+    let rest=falta,n=0;
+    const nParc=step>0?Math.ceil(1/step):1;
+    const vp=falta/nParc;
+    const AGORA=new Date();
+    while(rest>0.005&&n<60){
+      n++;
+      let dd;
+      if(step===0)dd=new Date(e.festa.slice(0,10)+'T12:00:00');
+      else{dd=new Date(base.getTime());dd.setMonth(dd.getMonth()+Math.round(n*(1/step)))}
+      if(dd<AGORA)continue; // parcela vencida no passado não vira previsão
+      const mk=dd.toISOString().slice(0,7);
+      const v=Math.min(vp,rest);
+      out.push({mes:mk,val:v,ev:e});
+      rest-=v;
+    }
+  });
+  return out;
+}
+function chartMeses(){
+  const meses=monthsRange();
+  const real={},prev={};
+  meses.forEach(m=>{real[m]=0;prev[m]=0});
+  DB.caixa.forEach(c=>{if(c.dc==='C'&&monthKey(c.data)in real)real[monthKey(c.data)]+=(+c.val||0)});
+  previsao().forEach(p=>{if(p.mes in prev)prev[p.mes]+=p.val});
+  const max=Math.max(1,...meses.map(m=>Math.max(real[m],prev[m])));
+  let h='';
+  meses.forEach(m=>{
+    const [y,mm]=m.split('-');
+    const hr=Math.round(real[m]/max*150),hp=Math.round(prev[m]/max*150);
+    h+=`<div class="bar-col"><div class="bar-vl">${real[m]>0?kfmt(real[m]):''}</div>
+      <div class="bar-stack">
+        ${prev[m]>0?`<div class="bar prev" style="height:${hp}px" title="Previsão: ${money(prev[m])}"></div>`:''}
+        ${real[m]>0?`<div class="bar real" style="height:${hr}px" title="Recebido: ${money(real[m])}"></div>`:''}
+      </div>
+      <div class="bar-lb">${MESES[+mm-1]}/${y.slice(2)}</div></div>`;
+  });
+  document.getElementById('chartMeses').innerHTML=meses.length?h:'<div class="empty">Sem dados ainda</div>';
+}
+function kfmt(v){return v>=1000?'R$'+(v/1000).toFixed(1).replace('.',',')+'k':money(v)}
+function donutForma(){
+  const byF={};
+  DB.caixa.filter(c=>c.dc==='C').forEach(c=>{const f=(c.forma||'—').toUpperCase();byF[f]=(byF[f]||0)+(+c.val||0)});
+  const tot=Object.values(byF).reduce((a,b)=>a+b,0);
+  const ks=Object.keys(byF).sort((a,b)=>byF[b]-byF[a]);
+  if(!tot){document.getElementById('donutForma').innerHTML='<div class="empty">Sem receitas no caixa</div>';return}
+  let acc=0,seg='';
+  ks.forEach((k,i)=>{const frac=byF[k]/tot;const a0=acc*360-90;acc+=frac;const a1=acc*360-90;
+    seg+=`<circle cx="60" cy="60" r="42" fill="none" stroke="${CORES[i%CORES.length]}" stroke-width="18" stroke-dasharray="${frac*264} 264" transform="rotate(${a0} 60 60)"/>`});
+  const svg=`<svg width="120" height="120" viewBox="0 0 120 120">${seg}<text x="60" y="57" text-anchor="middle" fill="#e8ecf5" font-size="13" font-weight="800">${kfmt(tot)}</text><text x="60" y="72" text-anchor="middle" fill="#8b93a7" font-size="9">recebido</text></svg>`;
+  const list=ks.map((k,i)=>`<div class="ditem"><i style="background:${CORES[i%CORES.length]}"></i>${esc(k)}<span class="dv">${money(byF[k])}</span></div>`).join('');
+  document.getElementById('donutForma').innerHTML=svg+`<div class="dlist">${list}</div>`;
+}
+function proxEventos(){
+  const hoje=today();
+  const ev=DB.eventos.filter(e=>e.festa>=hoje).sort((a,b)=>a.festa.localeCompare(b.festa)).slice(0,8);
+  if(!ev.length){document.getElementById('proxEventos').innerHTML='<div class="empty">Nenhum evento futuro</div>';return}
+  let h='<table><tr><th>Data</th><th>Cliente</th><th>Tipo</th><th>Falta</th><th></th></tr>';
+  ev.forEach(e=>{
+    h+=`<tr><td>${fmtD(e.festa)}</td><td>${esc(e.cli)}</td><td>${esc(e.tipo||'—')}</td><td class="num ${e.falta>0?'neg':''}">${money(e.falta)}</td><td><button class="btn sm" onclick="verParcelas('${e.id}')">Parcelas</button></td></tr>`;
+  });
+  document.getElementById('proxEventos').innerHTML=h+'</table>';
+}
+function tblTipos(){
+  const byT={};
+  DB.eventos.forEach(e=>{const t=(e.tipo||'—').toUpperCase();byT[t]=byT[t]||{c:0,tot:0,rec:0};byT[t].c++;byT[t].tot+=(+e.val||0);byT[t].rec+=(e.rec||0)});
+  const ks=Object.keys(byT);
+  if(!ks.length){document.getElementById('tblTipos').innerHTML='<div class="empty">Sem eventos</div>';return}
+  let h='<table><tr><th>Tipo</th><th>Qtd</th><th>Contratado</th><th>Recebido</th><th>Falta</th></tr>';
+  ks.sort((a,b)=>byT[b].tot-byT[a].tot).forEach(t=>{
+    const x=byT[t];
+    h+=`<tr><td>${esc(t)}</td><td>${x.c}</td><td class="num">${money(x.tot)}</td><td class="num pos">${money(x.rec)}</td><td class="num ${x.tot-x.rec>0?'neg':''}">${money(Math.max(0,x.tot-x.rec))}</td></tr>`;
+  });
+  document.getElementById('tblTipos').innerHTML=h+'</table>';
+}
+function alertas(){
+  const A=[];const hoje=today();
+  DB.eventos.forEach(e=>{
+    if(e.festa&&e.festa<hoje&&e.falta>0.005)A.push({t:'red',m:`<b>${esc(e.cli)}</b> — festa já realizada (${fmtD(e.festa)}) e ainda falta receber <b>${money(e.falta)}</b>`});
+    if(!e.reg)A.push({t:'org',m:`Evento de <b>${esc(e.cli)}</b> sem Nº de registro — os pagamentos no caixa não vão encontrar o contrato`});
+    if(e.festa&&e.festa>=hoje&&e.falta>0.005&&e.festa.slice(0,7)===hoje.slice(0,7))A.push({t:'org',m:`<b>${esc(e.cli)}</b> tem festa em ${fmtD(e.festa)} e falta <b>${money(e.falta)}</b> — cobrar antes`});
+  });
+  const semReg=DB.caixa.filter(c=>c.cat==='RECEITA DE EVENTO'&&!c.evId&&c.dc==='C');
+  if(semReg.length)A.push({t:'org',m:`${semReg.length} receita(s) de evento no caixa <b>sem registro vinculado</b> (${money(semReg.reduce((a,c)=>a+(+c.val||0),0))}) — edite o lançamento e informe o Nº`});
+  const el=document.getElementById('alertas');
+  if(!A.length){el.innerHTML='<div class="empty">Tudo em ordem ✅</div>';return}
+  el.innerHTML=A.slice(0,10).map(a=>`<div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:13px"><span class="badge b-${a.t}">${a.t==='red'?'URGENTE':'ATENÇÃO'}</span> ${a.m}</div>`).join('');
+}
+</script>
+<script>
+/* ================= EVENTOS ================= */
+let evEdit=null;
+function formEvento(id){
+  evEdit=id||null;
+  const e=id?DB.eventos.find(x=>x.id===id):null;
+  document.getElementById('mEvTitle').textContent=id?'Editar evento':'Novo evento';
+  document.getElementById('eReg').value=e?e.reg:nextReg();
+  document.getElementById('eReg').disabled=!!id;
+  document.getElementById('eCli').value=e?e.cli:'';
+  document.getElementById('eContrato').value=e?e.contrato:'';
+  document.getElementById('eFesta').value=e?e.festa:'';
+  document.getElementById('eLocal').value=e?e.local:'';
+  document.getElementById('eTipo').value=e?e.tipo:'';
+  document.getElementById('eVal').value=e?e.val:'';
+  document.getElementById('eFreq').value=e?(e.freq||'MENSAL'):'MENSAL';
+  document.getElementById('eForma').value=e?(e.forma||'PIX'):'PIX';
+  document.getElementById('mEv').classList.add('on');
+  setTimeout(()=>document.getElementById('eCli').focus(),100);
+}
+function salvarEvento(){
+  const cli=document.getElementById('eCli').value.trim();
+  const festa=document.getElementById('eFesta').value;
+  const val=+document.getElementById('eVal').value||0;
+  if(!cli||!festa||!val){toast('Preencha cliente, data da festa e valor total','err');return}
+  const obj={
+    id:evEdit||uid(),
+    reg:document.getElementById('eReg').value.trim()||nextReg(),
+    cli:cli,contrato:document.getElementById('eContrato').value,
+    festa:festa,local:document.getElementById('eLocal').value.trim(),
+    tipo:document.getElementById('eTipo').value.trim(),
+    val:val,freq:document.getElementById('eFreq').value,
+    forma:document.getElementById('eForma').value
+  };
+  if(evEdit){const i=DB.eventos.findIndex(x=>x.id===evEdit);DB.eventos[i]=obj}
+  else DB.eventos.push(obj);
+  save();fecha('mEv');renderAll();
+  toast('Evento salvo — Registro '+obj.reg,'ok');
+}
+function delEvento(id){
+  const e=DB.eventos.find(x=>x.id===id);
+  const n=DB.caixa.filter(c=>c.evId===id).length;
+  if(!confirm(`Excluir o evento de ${e.cli}?\n${n?n+' lançamento(s) do caixa continuarão no histórico (desvinculados).':''}`))return;
+  DB.eventos=DB.eventos.filter(x=>x.id!==id);
+  DB.caixa.forEach(c=>{if(c.evId===id)delete c.evId});
+  save();renderAll();toast('Evento excluído','ok');
+}
+function tblEventos(){
+  const el=document.getElementById('tblEventos');
+  if(!DB.eventos.length){el.innerHTML='<tr><td><div class="empty">Nenhum evento. Clique em "Novo evento" — o Nº de registro é gerado automaticamente (EV-0001, EV-0002...)</div></td></tr>';return}
+  calcEventos();
+  const ev=DB.eventos.slice().sort((a,b)=>(b.festa||'').localeCompare(a.festa||''));
+  let h='<tr><th>Registro</th><th>Cliente</th><th>Contrato</th><th>Festa</th><th>Local</th><th>Tipo</th><th class="num">Total</th><th class="num">Recebido</th><th class="num">Falta</th><th>Progresso</th><th></th></tr>';
+  ev.forEach(e=>{
+    const pct=e.val?Math.min(100,Math.round(e.rec/e.val*100)):0;
+    const hoje=today();
+    const st=e.festa<hoje?(e.falta>0.005?'b-red':'b-grn'):(e.falta>0.005?'b-org':'b-grn');
+    const stt=e.festa<hoje?(e.falta>0.005?'REALIZADO — A RECEBER':'REALIZADO ✓'):(e.falta>0.005?'A RECEBER':'PAGO ✓');
+    h+=`<tr>
+      <td><span class="badge b-vio">${esc(e.reg)}</span></td>
+      <td><b>${esc(e.cli)}</b></td>
+      <td>${fmtD(e.contrato)}</td><td>${fmtD(e.festa)}</td>
+      <td>${esc(e.local||'—')}</td><td>${esc(e.tipo||'—')}</td>
+      <td class="num">${money(e.val)}</td>
+      <td class="num pos">${money(e.rec)}</td>
+      <td class="num ${e.falta>0.005?'neg':''}">${money(e.falta)}</td>
+      <td><div style="display:flex;align-items:center;gap:8px"><div class="prog"><i style="width:${pct}%"></i></div><span style="font-size:11px">${pct}%</span> <span class="badge ${st}" style="margin-left:4px">${stt}</span></div></td>
+      <td style="white-space:nowrap">
+        <button class="btn sm" onclick="verParcelas('${e.id}')">👁️</button>
+        <button class="btn sm" onclick="formEvento('${e.id}')">✏️</button>
+        <button class="btn sm r" onclick="delEvento('${e.id}')">✕</button>
+      </td></tr>`;
+  });
+  el.innerHTML=h;
+}
+/* parcelas: modal com recebimentos do caixa vinculados + previsão */
+function verParcelas(id){
+  const e=DB.eventos.find(x=>x.id===id);if(!e)return;
+  calcEventos();
+  const pgs=DB.caixa.filter(c=>c.evId===id&&c.dc==='C').sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  let h=`<div style="font-size:13px;color:var(--mut);margin-bottom:10px">Registro <span class="badge b-vio">${esc(e.reg)}</span> · Total <b>${money(e.val)}</b> · Recebido <b class="pos">${money(e.rec)}</b> · Falta <b class="neg">${money(e.falta)}</b></div>`;
+  h+='<table><tr><th>#</th><th>Data</th><th>Forma</th><th class="num">Valor</th><th>Origem</th></tr>';
+  if(!pgs.length)h+='<tr><td colspan="5"><div class="empty">Nenhum recebimento lançado no caixa com o registro '+esc(e.reg)+'</div></td></tr>';
+  pgs.forEach((p,i)=>{h+=`<tr><td>${i+1}ª</td><td>${fmtD(p.data)}</td><td>${esc(p.forma||'—')}</td><td class="num pos">${money(p.val)}</td><td><span class="badge b-mut">caixa</span></td></tr>`});
+  h+='</table>';
+  // previsão
+  const prev=previsao().filter(p=>p.ev.id===id);
+  if(prev.length){
+    h+='<h3 style="margin:14px 0 8px;font-size:13px">Previsão (frequência: '+esc(e.freq||'MENSAL')+')</h3><table><tr><th>Parcela prevista</th><th class="num">Valor</th></tr>';
+    prev.forEach(p=>{h+=`<tr><td>${MESES[+p.mes.split('-')[1]-1]}/${p.mes.split('-')[0]}</td><td class="num">${money(p.val)}</td></tr>`});
+    h+='</table>';
+  }
+  h+=`<div style="margin-top:12px;display:flex;gap:10px"><button class="btn p" onclick="lancarDoEvento('${id}')">＋ Lançar recebimento no caixa</button><button class="btn" onclick="formEvento('${id}')">✏️ Editar evento</button></div>`;
+  document.getElementById('pTitle').textContent='Parcelas — '+e.cli;
+  document.getElementById('pBody').innerHTML=h;
+  document.getElementById('mParc').classList.add('on');
+}
+function lancarDoEvento(id){
+  const e=DB.eventos.find(x=>x.id===id);
+  fecha('mParc');
+  navGo('caixa');
+  document.getElementById('cData').value=today();
+  document.getElementById('cDesc').value='Recebimento '+e.cli;
+  document.getElementById('cCat').value='RECEITA DE EVENTO';
+  document.getElementById('cDC').value='C';
+  catChange();
+  document.getElementById('cReg').value=e.reg;
+  regChange();
+  document.getElementById('cVal').focus();
+  toast('Preencha o valor e clique em Lançar');
+}
+
+/* ================= CAIXA ================= */
+function catChange(){
+  const isEv=document.getElementById('cCat').value==='RECEITA DE EVENTO';
+  document.getElementById('cRegBox').style.display=isEv?'block':'none';
+  if(isEv)regChange();else document.getElementById('regHint').style.display='none';
+}
+function regChange(){
+  const hint=document.getElementById('regHint'),info=document.getElementById('regInfo');
+  const r=document.getElementById('cReg').value.trim();
+  hint.style.display='none';info.innerHTML='';
+  if(!r)return;
+  const e=evByReg(r);
+  if(!e){
+    hint.innerHTML='⚠️ Não existe evento com o registro <b>'+esc(r)+'</b>. <a href="#" onclick="navGo(\'eventos\');formEvento();document.getElementById(\'eReg\').value=\''+esc(r)+'\';return false" style="color:var(--gold)">Cadastrar evento agora</a> — informe cliente, data da festa e valor total.';
+    hint.style.display='block';
+  }else{
+    calcEventos();
+    info.innerHTML=`✅ <b>${esc(e.cli)}</b> · festa ${fmtD(e.festa)} · total <b>${money(e.val)}</b> · recebido <b class="pos">${money(e.rec)}</b> · falta <b class="neg">${money(e.falta)}</b>`;
+  }
+}
+function salvarCaixa(){
+  const data=document.getElementById('cData').value;
+  const desc=document.getElementById('cDesc').value.trim();
+  const cat=document.getElementById('cCat').value;
+  const dc=document.getElementById('cDC').value;
+  const val=+document.getElementById('cVal').value||0;
+  if(!data||!desc||!cat||!val){toast('Preencha data, descrição, categoria e valor','err');return}
+  const isEv=cat==='RECEITA DE EVENTO'&&dc==='C';
+  let evId=null,reg='';
+  if(isEv){
+    reg=document.getElementById('cReg').value.trim();
+    const e=evByReg(reg);
+    if(!e){
+      if(!confirm('Não existe evento com o registro "'+reg+'".\nLançar SEM vínculo (poderá vincular depois)?'))return;
+    }else{
+      evId=e.id;
+      calcEventos();
+      if(e.falta>0.005&&val>e.falta+0.005){
+        if(!confirm(`Atenção: falta apenas ${money(e.falta)} no evento ${e.cli}.\nLançar ${money(val)} mesmo assim (ficará com crédito a mais)?`))return;
+      }
+    }
+  }
+  DB.caixa.push({id:uid(),data,desc,cat,tipo:document.getElementById('cTipo').value.trim(),dc,val,evId,reg,forma:(DB._formaTemp||'')});
+  save();
+  document.getElementById('cDesc').value='';document.getElementById('cVal').value='';
+  document.getElementById('cTipo').value='';
+  renderAll();
+  if(evId){
+    const e=evByReg(reg);calcEventos();
+    toast(`Lançado! ${e.cli}: falta receber ${money(e.falta)}`,'ok');
+  }else toast('Lançamento salvo','ok');
+}
+function delCaixa(id){if(!confirm('Excluir lançamento?'))return;DB.caixa=DB.caixa.filter(c=>c.id!==id);save();renderAll()}
+function tblCaixa(){
+  const el=document.getElementById('tblCaixa');
+  const cx=DB.caixa.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  if(!cx.length){el.innerHTML='<tr><td><div class="empty">Caixa vazio. Lance a primeira movimentação acima.</div></td></tr>';return}
+  let h='<tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo festa</th><th>Registro</th><th>D/C</th><th class="num">Valor</th><th class="num">Saldo</th><th></th></tr>';
+  // saldo acumulado em ordem cronológica
+  const ord=DB.caixa.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||''));
+  let s=0;const saldos={};
+  ord.forEach(c=>{s+=c.dc==='D'?-(+c.val||0):(+c.val||0);saldos[c.id]=s});
+  cx.forEach(c=>{
+    const e=c.evId?DB.eventos.find(x=>x.id===c.evId):null;
+    h+=`<tr><td>${fmtD(c.data)}</td><td>${esc(c.desc)}</td><td>${esc(c.cat)}</td><td>${esc(c.tipo||'—')}</td>
+    <td>${e?`<span class="badge b-vio" title="${esc(e.cli)}">${esc(c.reg||'')}</span>`:(c.reg?'<span class="badge b-red">sem vínculo</span>':'—')}</td>
+    <td><span class="badge ${c.dc==='C'?'b-grn':'b-red'}">${c.dc}</span></td>
+    <td class="num ${c.dc==='C'?'pos':'neg'}">${money(c.val)}</td>
+    <td class="num" style="color:var(--mut)">${money(saldos[c.id])}</td>
+    <td><button class="btn sm r" onclick="delCaixa('${c.id}')">✕</button></td></tr>`;
+  });
+  el.innerHTML=h;
+}
+</script>
+<script>
+/* ================= AGENDA ================= */
+let agY,agM;
+function agInit(){const d=new Date();agY=d.getFullYear();agM=d.getMonth()}
+function mNav(n){agM+=n;if(agM<0){agM=11;agY--}if(agM>11){agM=0;agY++}renderAgenda()}
+function renderAgenda(){
+  document.getElementById('agLabel').textContent=new Date(agY,agM,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  const first=new Date(agY,agM,1);
+  const start=(first.getDay()+6)%7; // segunda=0
+  const days=new Date(agY,agM+1,0).getDate();
+  const hoje=today();
+  let h='';
+  ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'].forEach(d=>h+=`<div class="dow">${d}</div>`);
+  for(let i=0;i<start;i++)h+='<div class="day out"></div>';
+  let evMes=0;
+  for(let d=1;d<=days;d++){
+    const ds=`${agY}-${String(agM+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const evs=DB.eventos.filter(e=>e.festa===ds).sort((a,b)=>(a.local||'').localeCompare(b.local||''));
+    evMes+=evs.length;
+    h+=`<div class="day ${ds===hoje?'today':''}"><div class="dn">${d}</div>${evs.map(e=>`<span class="ev-dot ${ds<hoje?'past':''}" title="${esc(e.cli)} — ${esc(e.tipo||'')} — falta ${money(e.falta)}" onclick="verParcelas('${e.id}')">${fmtD(ds).slice(0,5)} ${esc(e.cli)}${e.falta>0.005?' · '+kfmt(e.falta):''}</span>`).join('')}</div>`;
+  }
+  document.getElementById('calGrid').innerHTML=h;
+  document.getElementById('agResumo').textContent=evMes+' evento(s) no mês · '+DB.eventos.filter(e=>e.festa>=hoje).length+' futuros';
+  // lista do mês
+  const evs=DB.eventos.filter(e=>(e.festa||'').slice(0,7)===`${agY}-${String(agM+1).padStart(2,'0')}`).sort((a,b)=>a.festa.localeCompare(b.festa));
+  document.getElementById('agListaTitle').textContent='Eventos de '+new Date(agY,agM,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  if(!evs.length){document.getElementById('agLista').innerHTML='<div class="empty">Nenhum evento neste mês</div>';return}
+  let t='<div class="tbl-wrap"><table><tr><th>Dia</th><th>Cliente</th><th>Local</th><th>Tipo</th><th class="num">Total</th><th class="num">Falta</th><th></th></tr>';
+  evs.forEach(e=>{t+=`<tr><td><b>${fmtD(e.festa).slice(0,5)}</b></td><td>${esc(e.cli)}</td><td>${esc(e.local||'—')}</td><td>${esc(e.tipo||'—')}</td><td class="num">${money(e.val)}</td><td class="num ${e.falta>0.005?'neg':'pos'}">${money(e.falta)}</td><td><button class="btn sm" onclick="verParcelas('${e.id}')">Parcelas</button></td></tr>`});
+  document.getElementById('agLista').innerHTML=t+'</table></div>';
+}
+
+/* ================= RELATÓRIOS ================= */
+function relatorios(){
+  const meses=monthsRange();
+  // r1: mês × modalidade
+  const formas={};
+  DB.caixa.filter(c=>c.dc==='C').forEach(c=>{const f=(c.forma||'NÃO INFORMADO').toUpperCase();formas[f]=formas[f]||{};formas[f][monthKey(c.data)]=(formas[f][monthKey(c.data)]||0)+(+c.val||0)});
+  let h='<tr><th>Mês</th>'+Object.keys(formas).map(f=>`<th class="num">${esc(f)}</th>`).join('')+'<th class="num">Total</th></tr>';
+  let colT={};
+  meses.forEach(m=>{
+    const tot=Object.keys(formas).reduce((a,f)=>a+(formas[f][m]||0),0);
+    h+=`<tr><td>${MESES[+m.split('-')[1]-1]}/${m.split('-')[0]}</td>`+Object.keys(formas).map(f=>{const v=formas[f][m]||0;colT[f]=(colT[f]||0)+v;return `<td class="num">${v?money(v):'—'}</td>`}).join('')+`<td class="num"><b>${money(tot)}</b></td></tr>`;
+  });
+  h+=`<tr class="tot"><td>TOTAL</td>`+Object.keys(formas).map(f=>`<td class="num">${money(colT[f])}</td>`).join('')+`<td class="num">${money(Object.values(colT).reduce((a,b)=>a+b,0))}</td></tr>`;
+  document.getElementById('r1').innerHTML=Object.keys(formas).length?h:'<tr><td><div class="empty">Sem recebimentos</div></td></tr>';
+  // r2: mês × tipo de festa (recebido)
+  const tipos={};
+  DB.caixa.filter(c=>c.dc==='C').forEach(c=>{const t=(c.tipo||(c.evId?(DB.eventos.find(e=>e.id===c.evId)||{}).tipo:'')||'NÃO INFORMADO').toUpperCase();tipos[t]=tipos[t]||{};tipos[t][monthKey(c.data)]=(tipos[t][monthKey(c.data)]||0)+(+c.val||0)});
+  let h2='<tr><th>Mês</th>'+Object.keys(tipos).map(f=>`<th class="num">${esc(f)}</th>`).join('')+'<th class="num">Total</th></tr>';
+  let colT2={};
+  meses.forEach(m=>{
+    const tot=Object.keys(tipos).reduce((a,f)=>a+(tipos[f][m]||0),0);
+    h2+=`<tr><td>${MESES[+m.split('-')[1]-1]}/${m.split('-')[0]}</td>`+Object.keys(tipos).map(f=>{const v=tipos[f][m]||0;colT2[f]=(colT2[f]||0)+v;return `<td class="num">${v?money(v):'—'}</td>`}).join('')+`<td class="num"><b>${money(tot)}</b></td></tr>`;
+  });
+  h2+=`<tr class="tot"><td>TOTAL</td>`+Object.keys(tipos).map(f=>`<td class="num">${money(colT2[f])}</td>`).join('')+`<td class="num">${money(Object.values(colT2).reduce((a,b)=>a+b,0))}</td></tr>`;
+  document.getElementById('r2').innerHTML=Object.keys(tipos).length?h2:'<tr><td><div class="empty">Sem recebimentos</div></td></tr>';
+  // r3: previsão a receber mês a mês
+  const prev=previsao();
+  const byM={};
+  prev.forEach(p=>byM[p.mes]=(byM[p.mes]||0)+p.val);
+  const mk=Object.keys(byM).sort();
+  let h3='<tr><th>Mês</th><th class="num">A receber (previsão)</th></tr>';
+  mk.forEach(m=>{h3+=`<tr><td>${MESES[+m.split('-')[1]-1]}/${m.split('-')[0]}</td><td class="num">${money(byM[m])}</td></tr>`});
+  h3+=`<tr class="tot"><td>TOTAL</td><td class="num">${money(Object.values(byM).reduce((a,b)=>a+b,0))}</td></tr>`;
+  document.getElementById('r3').innerHTML=mk.length?h3:'<tr><td><div class="empty">Nada pendente</div></td></tr>';
+  // r4: eventos dia a dia próximos 120 dias
+  const hi=new Date();hi.setDate(hi.getDate()+120);
+  const his=hi.toISOString().slice(0,10);const hoje=today();
+  const evs=DB.eventos.filter(e=>e.festa&&e.festa>=hoje&&e.festa<=his).sort((a,b)=>a.festa.localeCompare(b.festa));
+  let h4='<tr><th>Data</th><th>Dia sem.</th><th>Cliente</th><th>Local</th><th>Tipo</th><th class="num">Total</th><th class="num">Recebido</th><th class="num">Falta</th></tr>';
+  const dias=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  evs.forEach(e=>{const dw=dias[new Date(e.festa+'T12:00:00').getDay()];
+    h4+=`<tr><td><b>${fmtD(e.festa)}</b></td><td>${dw}</td><td>${esc(e.cli)}</td><td>${esc(e.local||'—')}</td><td>${esc(e.tipo||'—')}</td><td class="num">${money(e.val)}</td><td class="num pos">${money(e.rec)}</td><td class="num ${e.falta>0.005?'neg':''}">${money(e.falta)}</td></tr>`});
+  document.getElementById('r4').innerHTML=evs.length?h4:'<tr><td><div class="empty">Nenhum evento nos próximos 120 dias</div></td></tr>';
+  // r5: situação por evento
+  calcEventos();
+  let h5='<tr><th>Registro</th><th>Cliente</th><th>Festa</th><th class="num">Total</th><th class="num">Recebido</th><th class="num">Falta</th><th>Situação</th></tr>';
+  DB.eventos.slice().sort((a,b)=>(b.festa||'').localeCompare(a.festa||'')).forEach(e=>{
+    const st=e.festa<hoje?(e.falta>0.005?'<span class="badge b-red">REALIZADO — COBRAR</span>':'<span class="badge b-grn">QUITADO</span>'):(e.falta>0.005?'<span class="badge b-org">A RECEBER</span>':'<span class="badge b-grn">QUITADO</span>');
+    h5+=`<tr><td><span class="badge b-vio">${esc(e.reg)}</span></td><td>${esc(e.cli)}</td><td>${fmtD(e.festa)}</td><td class="num">${money(e.val)}</td><td class="num pos">${money(e.rec)}</td><td class="num ${e.falta>0.005?'neg':''}">${money(e.falta)}</td><td>${st}</td></tr>`});
+  document.getElementById('r5').innerHTML=DB.eventos.length?h5:'<tr><td><div class="empty">Sem eventos</div></td></tr>';
+}
+
+/* ================= IMPORT XLSX ================= */
+/* localiza a linha de cabeçalho procurando por uma âncora e devolve {row, map} */
+function achaHeader(rows,ancora){
+  for(let i=0;i<Math.min(rows.length,15);i++){
+    const r=rows[i]||[];
+    const norm=r.map(c=>String(c==null?'':c).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase());
+    if(norm.some(c=>ancora.test(c))){
+      const map={};
+      norm.forEach((c,j)=>{if(c)map[c.trim()]=j});
+      return {i,map};
+    }
+  }
+  return null;
+}
+function colGet(row,map,re){
+  const key=Object.keys(map).find(k=>re.test(k.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase()));
+  return key!=null?(row[map[key]]):'';
+}
+function impEventos(inp){
+  const f=inp.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      const name=wb.SheetNames.find(n=>/RESUMO/i.test(n))||wb.SheetNames[0];
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:'',header:1});
+      const hdr=achaHeader(rows,/CLIENTE/);
+      if(!hdr)throw new Error('cabeçalho não encontrado (procurei a coluna CLIENTE)');
+      let n=0;
+      rows.slice(hdr.i+1).forEach(row=>{
+        const get=re=>colGet(row,hdr.map,re);
+        const cli=String(get(/CLIENTE/i)).replace(/\(EXEMPLO\)/i,'').trim();
+        const valRaw=String(get(/VR\.?\s*TOTAL/i));
+        const val=parseFloat(valRaw.replace(/[^\d,.-]/g,'').replace(',','.'))||0;
+        if(!cli||!val)return;
+        const festa=dstr(get(/DATA DA FESTA/i));
+        const contrato=dstr(get(/DATA ASS/i));
+        const local=String(get(/LOCAL/i)).trim();
+        const tipo=String(get(/TIPO/i)).trim();
+        const freq=String(get(/FREQUENC/i)).trim()||'MENSAL';
+        const forma=String(get(/FORMA/i)).trim()||'PIX';
+        const regSheet=String(get(/REGISTRO/i)).trim();
+        if(DB.eventos.some(x=>x.cli===cli&&x.festa===festa&&x.val===val))return;
+        DB.eventos.push({id:uid(),reg:regSheet||nextReg(),cli,contrato,festa,local,tipo,val,freq:(/15/i.test(freq)?'15 EM 15 DIAS':/SEM/i.test(freq)?'SEMANAL':/ÚNIC|UNIC/i.test(freq)?'ÚNICO':'MENSAL'),forma});
+        n++;
+      });
+      save();renderAll();
+      toast(n+' evento(s) importado(s) da planilha','ok');
+    }catch(err){toast('Erro ao ler planilha: '+err.message,'err')}
+    inp.value='';
+  };
+  rd.readAsArrayBuffer(f);
+}
+function dstr(v){
+  if(!v)return '';
+  if(v instanceof Date)return v.toISOString().slice(0,10);
+  const s=String(v).trim();
+  if(/^\d{4}-\d{2}-\d{2}/.test(s))return s.slice(0,10);
+  // serial do Excel (dias desde 30/12/1899)
+  if(/^\d{5}(\.\d+)?$/.test(s)){const d=new Date(Math.round((+s-25569)*86400000));return d.toISOString().slice(0,10)}
+  const m=/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/.exec(s);
+  if(m){let y=m[3].length===2?'20'+m[3]:m[3];return `${y}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`}
+  const d=new Date(s);if(!isNaN(d))return d.toISOString().slice(0,10);
+  return '';
+}
+function impCaixa(inp){
+  const f=inp.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array',cellDates:true});
+      const name=wb.SheetNames[0];
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{defval:'',header:1});
+      const hdr=achaHeader(rows,/DESCRI/);
+      if(!hdr)throw new Error('cabeçalho não encontrado (procurei a coluna Descrição)');
+      let n=0;
+      rows.slice(hdr.i+1).forEach(row=>{
+        const get=re=>colGet(row,hdr.map,re);
+        const data=dstr(get(/DATA/i));
+        const desc=String(get(/DESCRI/i)).trim();
+        const cat=String(get(/CATEGOR/i)).trim()||'OUTRA RECEITA';
+        const tipo=String(get(/TIPO/i)).trim();
+        const reg=String(get(/REGISTRO/i)).trim();
+        const dc=String(get(/D ou C|D\/C|DC/i)).trim().toUpperCase().slice(0,1);
+        const val=parseFloat(String(get(/VALOR/i)).replace(/[^\d,.-]/g,'').replace(',','.'))||0;
+        if(!data||!desc||!val||!dc)return;
+        const isEv=/EVENTO/i.test(cat)&&dc==='C';
+        let evId=null;
+        if(isEv&&reg){const ev=evByReg(reg);if(ev)evId=ev.id}
+        DB.caixa.push({id:uid(),data,desc,cat,tipo,dc,val,evId,reg:isEv?reg:'',forma:''});
+        n++;
+      });
+      save();renderAll();
+      toast(n+' lançamento(s) importado(s) do caixa','ok');
+    }catch(err){toast('Erro ao ler planilha: '+err.message,'err')}
+    inp.value='';
+  };
+  rd.readAsArrayBuffer(f);
+}
+function expXlsx(){
+  calcEventos();
+  // RESUMO
+  const res=[['DATA ASS. CONTRATO','DATA DA FESTA','CLIENTE','LOCAL DA FESTA','TIPO FESTA','REGISTRO','VR. TOTAL DA FESTA','VR. JÁ RECEBIDO','FREQUENCIA DE RECEBIMENTO','FORMA DE RECEBIMENTO','FALTA RECEBER']];
+  DB.eventos.forEach(e=>res.push([e.contrato,e.festa,e.cli,e.local||'',e.tipo||'',e.reg,e.val,e.rec,e.freq||'',e.forma||'',e.falta]));
+  // FLUXO
+  const flu=[['DATA ASS. CONTRATO','DATA DA FESTA','CLIENTE','LOCAL','TIPO','REGISTRO','VR. TOTAL','VR. RECEBIDO','FALTA','RECEBIMENTOS NO CAIXA']];
+  DB.eventos.forEach(e=>{
+    const pgs=DB.caixa.filter(c=>c.evId===e.id&&c.dc==='C');
+    flu.push([e.contrato,e.festa,e.cli,e.local||'',e.tipo||'',e.reg,e.val,e.rec,e.falta,pgs.map(p=>fmtD(p.data)+' '+money(p.val)+' ('+(p.forma||'—')+')').join(' | ')]);
+  });
+  // CAIXA
+  const cx=[['Data','Descrição','Categoria','Tipo Festa','Registro','D ou C','Valor']];
+  DB.caixa.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||'')).forEach(c=>cx.push([c.data,c.desc,c.cat,c.tipo||'',c.reg||'',c.dc,c.val]));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(res),'RESUMO');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(flu),'FLUXO RECEBIM');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cx),'CAIXA');
+  XLSX.writeFile(wb,(DB.cfg.empresa||'gestao-eventos')+'-'+today()+'.xlsx');
+  toast('Planilha exportada','ok');
+}
+
+/* ================= BACKUP / JSON ================= */
+function bkpJson(){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(DB)],{type:'application/json'}));
+  a.download='backup-festas-'+today()+'.json';a.click();
+}
+function restJson(inp){
+  const f=inp.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=e=>{try{DB={...{eventos:[],caixa:[],seq:1,cfg:{}},...JSON.parse(e.target.result)};save();renderAll();toast('Backup restaurado','ok')}catch(err){toast('Arquivo inválido','err')}inp.value=''};
+  rd.readAsText(f);
+}
+function limparExemplos(){
+  DB.eventos=DB.eventos.filter(e=>!/EXEMPLO/i.test(e.cli));
+  DB.caixa=DB.caixa.filter(c=>!/EXEMPLO/i.test(c.desc||''));
+  save();renderAll();toast('Dados de exemplo removidos','ok');
+}
+function zerarTudo(){
+  if(!confirm('APAGAR TUDO? Eventos, caixa e configurações.\nFaça um backup antes!'))return;
+  if(!confirm('Tem certeza mesmo? Esta ação não pode ser desfeita.'))return;
+  DB={eventos:[],caixa:[],seq:1,cfg:{empresa:DB.cfg.empresa,topico:DB.cfg.topico}};
+  save();renderAll();toast('Dados apagados','ok');
+}
+
+/* ================= NUVEM (ntfy) ================= */
+let TOPIC='';
+function pubDB(){
+  if(!TOPIC)return;
+  clearTimeout(window._pubT);
+  window._pubT=setTimeout(()=>{
+    try{
+      fetch('https://ntfy.sh/'+TOPIC,{method:'POST',body:JSON.stringify({t:Date.now(),db:DB})}).then(r=>{if(r.ok){document.getElementById('cloudDot').classList.add('on')}});
+    }catch(e){}
+  },2500);
+}
+function pullDB(){
+  if(!TOPIC)return;
+  fetch('https://ntfy.sh/'+TOPIC+'/json?poll=1&since=12h')
+    .then(r=>r.json())
+    .then(j=>{
+      (j.messages||[]).forEach(m=>{
+        try{
+          const d=JSON.parse(m.message);
+          if(d.db&&d.t>DB._lastPull){
+            DB._lastPull=d.t;
+            DB.eventos=d.db.eventos||[];DB.caixa=d.db.caixa||[];
+            localStorage.setItem(LS,JSON.stringify(DB));
+            renderAll();
+          }
+        }catch(e){}
+      });
+      document.getElementById('cloudDot').classList.add('on');
+    })
+    .catch(()=>{document.getElementById('cloudDot').classList.remove('on')});
+}
+
+/* ================= CONFIG ================= */
+function salvarCfg(){
+  DB.cfg.empresa=document.getElementById('cfgEmpresa').value.trim();
+  const novoT=document.getElementById('cfgTopico').value.trim();
+  if(novoT!==TOPIC){TOPIC=novoT;DB.cfg.topico=novoT;DB._lastPull=0;save();pullDB()}
+  else{DB.cfg.topico=novoT;save()}
+  document.getElementById('tEmpresa').textContent=DB.cfg.empresa||'Gestão de Eventos & Festas';
+  toast('Configurações salvas','ok');
+}
+
+/* ================= NAV / INIT ================= */
+function navGo(s){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
+  document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));
+  document.getElementById('s-'+s).classList.add('on');
+  window.scrollTo(0,0);
+}
+function fecha(id){document.getElementById(id).classList.remove('on')}
+function renderAll(){
+  calcEventos();
+  kpis();chartMeses();donutForma();proxEventos();tblTipos();alertas();
+  tblEventos();tblCaixa();
+  renderAgenda();relatorios();
+  // datalists
+  document.getElementById('dlReg').innerHTML=DB.eventos.map(e=>`<option value="${esc(e.reg)}">${esc(e.cli)} — ${fmtD(e.festa)} — falta ${money(e.falta)}</option>`).join('');
+  const tipos=[...new Set(DB.eventos.map(e=>e.tipo).filter(Boolean))];
+  document.getElementById('dlTipos').innerHTML=tipos.map(t=>`<option value="${esc(t)}">`).join('');
+  document.getElementById('tEmpresa').textContent=DB.cfg.empresa||'Gestão de Eventos & Festas';
+}
+window.addEventListener('DOMContentLoaded',()=>{
+  load();
+  TOPIC=DB.cfg.topico||'';
+  document.getElementById('cfgEmpresa').value=DB.cfg.empresa||'';
+  document.getElementById('cfgTopico').value=TOPIC;
+  document.getElementById('cData').value=today();
+  document.getElementById('cCat').innerHTML=CATEGORIAS.map(c=>`<option>${c}</option>`).join('');
+  catChange();
+  agInit();
+  renderAll();
+  if(!DB.eventos.length&&!DB.caixa.length){seed();renderAll()}
+  document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>navGo(b.dataset.s));
+  document.querySelectorAll('.modal-bg').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('on')});
+  if(TOPIC){pullDB();setInterval(pullDB,30000)}
+});
+/* dados de exemplo (José e Maria das planilhas) */
+function seed(){
+  const j={id:uid(),reg:'EV-0001',cli:'JOSÉ DA SILVA',contrato:'2026-05-01',festa:'2026-10-21',local:'B.S.FRANCISCO-ES',tipo:'Casamento',val:20000,freq:'MENSAL',forma:'PIX'};
+  const m={id:uid(),reg:'EV-0002',cli:'MARIA DA SILVA',contrato:'2026-05-10',festa:'2027-01-01',local:'MANTENA',tipo:'15 Anos',val:30000,freq:'15 EM 15 DIAS',forma:'DINHEIRO'};
+  DB.eventos.push(j,m);
+  const pg1={id:uid(),data:'2026-01-01',desc:'Sinal casamento JOSÉ DA SILVA',cat:'RECEITA DE EVENTO',tipo:'Casamento',dc:'C',val:2000,evId:j.id,reg:'EV-0001',forma:'PIX'};
+  const pg2={id:uid(),data:'2026-02-01',desc:'Parcela casamento JOSÉ DA SILVA',cat:'RECEITA DE EVENTO',tipo:'Casamento',dc:'C',val:2000,evId:j.id,reg:'EV-0001',forma:'PIX'};
+  const pg3={id:uid(),data:'2026-04-01',desc:'Parcela casamento JOSÉ DA SILVA',cat:'RECEITA DE EVENTO',tipo:'Casamento',dc:'C',val:2000,evId:j.id,reg:'EV-0001',forma:'PIX'};
+  const pg4={id:uid(),data:'2026-05-10',desc:'Parcela casamento JOSÉ DA SILVA',cat:'RECEITA DE EVENTO',tipo:'Casamento',dc:'C',val:2000,evId:j.id,reg:'EV-0001',forma:'PIX'};
+  const pg5={id:uid(),data:'2026-06-05',desc:'Parcela casamento JOSÉ DA SILVA',cat:'RECEITA DE EVENTO',tipo:'Casamento',dc:'C',val:2000,evId:j.id,reg:'EV-0001',forma:'PIX'};
+  const pg6={id:uid(),data:'2026-07-02',desc:'Parcela casamento JOSÉ DA SILVA',cat:'RECEITA DE EVENTO',tipo:'Casamento',dc:'C',val:4000,evId:j.id,reg:'EV-0001',forma:'PIX'};
+  const desp={id:uid(),data:'2026-08-15',desc:'Compra decoração casamento Silva',cat:'DESPESA COM EVENTO',tipo:'Casamento',dc:'D',val:1500,forma:''};
+  DB.caixa.push(pg1,pg2,pg3,pg4,pg5,pg6,desp);
+  save();
+}
+</script>
+</body>
+</html>
