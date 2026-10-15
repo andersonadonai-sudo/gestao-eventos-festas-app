@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Gestão de Eventos & Festas</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🎉</text></svg>">
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#0e1118; --card:#171b26; --card2:#1e2432; --line:#2a3245; --tx:#e8ecf5; --mut:#8b93a7;
+  --vio:#7c5cff; --gold:#d4af37; --grn:#2ecc71; --red:#ff5d6c; --blu:#3d8bfd; --org:#ff9f43; --pink:#e05fa8;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--tx);font-family:'Segoe UI',system-ui,-apple-system,Roboto,sans-serif;font-size:15px;min-height:100vh}
+.topbar{display:flex;align-items:center;gap:12px;padding:14px 18px;background:linear-gradient(90deg,#141824,#1a1430 70%);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50;flex-wrap:wrap}
+.logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--vio),#4a2fb8);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.topbar h1{font-size:17px;font-weight:700;letter-spacing:.2px}
+.topbar .sub{font-size:11px;color:var(--mut)}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.saldo-pill{background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:13px}
+.saldo-pill b{font-size:14px}
+.cloud-dot{width:9px;height:9px;border-radius:50%;background:#555;display:inline-block;margin-right:5px}
+.cloud-dot.on{background:var(--grn);box-shadow:0 0 6px var(--grn)}
+nav{display:flex;gap:6px;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);overflow-x:auto;position:sticky;top:71px;z-index:49}
+nav button{background:none;border:none;color:var(--mut);font-size:14px;font-weight:600;padding:9px 16px;border-radius:10px;cursor:pointer;white-space:nowrap;font-family:inherit;transition:.15s}
+nav button.on{background:linear-gradient(135deg,var(--vio),#5b3fd6);color:#fff;box-shadow:0 3px 12px rgba(124,92,255,.35)}
+main{padding:16px;max-width:1200px;margin:0 auto;padding-bottom:90px}
+.screen{display:none;animation:fade .25s}
+.screen.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+h2{font-size:18px;margin:6px 0 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+h2 .btn{margin-left:auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 14px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--ac,var(--vio))}
+.kpi .lb{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
+.kpi .vl{font-size:17px;font-weight:800;margin-top:5px;white-space:nowrap}
+.kpi .xs{font-size:11px;color:var(--mut);margin-top:3px}
+.grid2{display:grid;grid-template-columns:2fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card h3{font-size:14px;margin-bottom:12px;color:var(--tx)}
+.card h3 small{color:var(--mut);font-weight:400;font-size:11px;margin-left:6px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.4px;text-align:left;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 8px;border-bottom:1px solid rgba(42,50,69,.5);white-space:nowrap}
+tr:last-child td{border-bottom:none}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.tot td{font-weight:800;border-top:2px solid var(--line);background:rgba(124,92,255,.06)}
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.btn{background:var(--card2);border:1px solid var(--line);color:var(--tx);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:.15s;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:var(--vio)}
+.btn.p{background:linear-gradient(135deg,var(--vio),#5b3fd6);border:none;color:#fff;box-shadow:0 3px 12px rgba(124,92,255,.35)}
+.btn.g{background:linear-gradient(135deg,#1e9e5a,#2ecc71);border:none;color:#fff}
+.btn.r{background:linear-gradient(135deg,#c0392b,#ff5d6c);border:none;color:#fff}
+.btn.sm{padding:6px 10px;font-size:12px;border-radius:8px}
+input,select,textarea{background:var(--card2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:10px 12px;font-size:14px;font-family:inherit;width:100%;outline:none}
+input:focus,select:focus{border-color:var(--vio)}
+label{font-size:11px;color:var(--mut);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px}
+.frow{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.frow>div{flex:1;min-width:130px}
+.badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700}
+.b-grn{background:rgba(46,204,113,.15);color:var(--grn)}
+.b-red{background:rgba(255,93,108,.15);color:var(--red)}
+.b-org{background:rgba(255,159,67,.15);color:var(--org)}
+.b-blu{background:rgba(61,139,253,.15);color:var(--blu)}
+.b-vio{background:rgba(124,92,255,.18);color:#a78bff}
+.b-gold{background:rgba(212,175,55,.15);color:var(--gold)}
+.b-mut{background:rgba(139,147,167,.15);color:var(--mut)}
+.pos{color:var(--grn)} .neg{color:var(--red)}
+.bar-chart{display:flex;align-items:flex-end;gap:8px;height:190px;padding-top:10px}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.bar-stack{width:100%;max-width:46px;display:flex;flex-direction:column-reverse;justify-content:flex-start;height:160px;position:relative}
+.bar{width:100%;border-radius:6px 6px 0 0;min-height:2px;position:relative;transition:height .4s}
+.bar.real{background:linear-gradient(180deg,#9d7dff,var(--vio))}
+.bar.prev{background:repeating-linear-gradient(45deg,rgba(124,92,255,.35),rgba(124,92,255,.35) 4px,rgba(124,92,255,.12) 4px,rgba(124,92,255,.12) 8px)}
+.bar-lb{font-size:10px;color:var(--mut);white-space:nowrap}
+.bar-vl{font-size:10px;color:var(--tx);font-weight:700}
+.legend{display:flex;gap:14px;font-size:11px;color:var(--mut);margin-top:8px;flex-wrap:wrap}
+.legend i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
+.donut-wrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.dlist{flex:1;min-width:150px}
+.ditem{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0}
+.ditem i{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.ditem .dv{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal .dow{font-size:10px;color:var(--mut);text-align:center;text-transform:uppercase;padding:4px 0}
+.cal .day{background:var(--card2);border:1px solid var(--line);border-radius:10px;min-height:64px;padding:6px;font-size:11px;position:relative}
+.cal .day.out{opacity:.25}
+.cal .day.today{border-color:var(--gold)}
+.cal .day .dn{font-weight:800;font-size:12px}
+.ev-dot{display:block;font-size:10px;margin-top:3px;padding:2px 5px;border-radius:6px;background:rgba(124,92,255,.2);color:#c3b3ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev-dot.past{background:rgba(255,93,108,.15);color:#ff9aa5}
+.mnav{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.mnav b{font-size:16px;text-transform:capitalize}
+.mnav button{width:38px}
+.modal-bg{position:fixed;inset:0;background:rgba(5,8,15,.75);backdrop-filter:blur(3px);z-index:100;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow:auto}
+.modal-bg.on{display:flex}
+.modal{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;width:100%;max-width:520px;margin-top:6vh;animation:fade .2s}
+.modal h3{font-size:16px;margin-bottom:14px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--card2);border:1px solid var(--line);color:var(--tx);padding:12px 20px;border-radius:12px;font-size:13px;z-index:200;box-shadow:0 8px 30px rgba(0,0,0,.5);display:none;max-width:90vw;text-align:center}
+.toast.err{border-color:var(--red);color:#ffb3ba}
+.toast.ok{border-color:var(--grn)}
+.empty{text-align:center;color:var(--mut);padding:26px 10px;font-size:13px}
+.reg-hint{background:rgba(212,175,55,.08);border:1px solid rgba(212,175,55,.3);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--gold);margin-bottom:10px;display:none}
+.prog{height:7px;background:var(--card2);border-radius:99px;overflow:hidden;min-width:70px}
+.prog i{display:block;height:100%;background:linear-gradient(90deg,var(--vio),var(--grn));border-radius:99px}
+@media(max-width:900px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .grid2,.grid3{grid-template-columns:1fr}
+  nav{top:110px}
+  .kpi .vl{font-size:15px}
+}
+@media print{
+  body{background:#fff;color:#000}
+  .topbar,nav,.btn,.no-print{display:none!important}
+  .card{border:1px solid #ccc;background:#fff;break-inside:avoid}
+  .screen{display:block!important}
+  .screen .card:not(.print-ok){display:none}
+  th,td{color:#000;border-color:#ddd}
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo">🎉</div>
+  <div>
+    <h1 id="tEmpresa">Gestão de Eventos & Festas</h1>
+    <div class="sub">Caixa + Contratos + Recebimentos — integrado</div>
+  </div>
+  <div class="top-right">
+    <div class="saldo-pill"><span class="cloud-dot" id="cloudDot"></span>Saldo caixa: <b id="tSaldo">R$ 0,00</b></div>
+  </div>
+</div>
+
+<nav id="nav">
+  <button data-s="dash" class="on">📊 Dashboard</button>
+  <button data-s="eventos">📅 Eventos</button>
+  <button data-s="caixa">💰 Caixa</button>
+  <button data-s="agenda">🗓️ Agenda</button>
+  <button data-s="rel">📈 Relatórios</button>
+  <button data-s="cfg">⚙️ Config</button>
+</nav>
+
+<main>
+  <!-- ============ DASHBOARD ============ -->
+  <section class="screen on" id="s-dash">
+    <div class="kpis" id="kpis"></div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Recebimentos mês a mês <small>realizado × previsão</small></h3>
+        <div class="bar-chart" id="chartMeses"></div>
+        <div class="legend">
+          <span><i style="background:linear-gradient(180deg,#9d7dff,var(--vio))"></i>Recebido (caixa)</span>
+          <span><i style="background:repeating-linear-gradient(45deg,rgba(124,92,255,.35),rgba(124,92,255,.35) 4px,rgba(124,92,255,.12) 4px,rgba(124,92,255,.12) 8px)"></i>Previsão (frequência dos contratos)</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Recebido por modalidade</h3>
+        <div class="donut-wrap" id="donutForma"></div>
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:14px">
+      <div class="card">
+        <h3>Próximos eventos</h3>
+        <div class="tbl-wrap" id="proxEventos"></div>
+      </div>
+      <div class="card">
+        <h3>Por tipo de festa <small>contratado × recebido × falta</small></h3>
+        <div class="tbl-wrap" id="tblTipos"></div>
+      </div>
+    </div>
+    <div class="card" id="alertasCard">
+      <h3>⚠️ Alertas</h3>
+      <div id="alertas"></div>
+    </div>
+  </section>
+
+  <!-- ============ EVENTOS ============ -->
+  <section class="screen" id="s-eventos">
+    <h2>📅 Eventos & Contratos <button class="btn p" onclick="formEvento()">＋ Novo evento</button></h2>
+    <div class="card">
+      <div class="tbl-wrap">
+        <table id="tblEventos"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CAIXA ============ -->
+  <section class="screen" id="s-caixa">
+    <h2>💰 Controle de Caixa</h2>
+    <div class="card no-print">
+      <div class="reg-hint" id="regHint"></div>
+      <div class="frow">
+        <div style="max-width:150px"><label>Data</label><input type="date" id="cData"></div>
+        <div style="flex:2"><label>Descrição</label><input id="cDesc" placeholder="Ex.: Sinal casamento Silva / Aluguel som"></div>
+        <div style="max-width:210px"><label>Categoria</label><select id="cCat" onchange="catChange()"></select></div>
+        <div style="max-width:150px"><label>Tipo festa</label><input id="cTipo" placeholder="—" list="dlTipos"></div>
+        <div style="max-width:140px"><label>D ou C</label><select id="cDC"><option value="C">C — Crédito</option><option value="D">D — Débito</option></select></div>
+        <div style="max-width:140px"><label>Valor (R$)</label><input type="number" id="cVal" step="0.01" min="0" placeholder="0,00"></div>
+        <div style="max-width:120px;display:flex;align-items:flex-end"><button class="btn p" style="width:100%" onclick="salvarCaixa()">Lançar</button></div>
+      </div>
+      <div id="cRegBox" style="display:none">
+        <div class="frow">
+          <div style="max-width:220px"><label>Nº Registro do evento</label><input id="cReg" list="dlReg" placeholder="Ex.: EV-0001" oninput="regChange()"></div>
+          <div style="flex:2;display:flex;align-items:flex-end"><div id="regInfo" style="font-size:12px;color:var(--mut);padding-bottom:10px"></div></div>
+        </div>
+      </div>
+      <datalist id="dlReg"></datalist>
+      <datalist id="dlTipos"></datalist>
+    </div>
+    <div class="card">
+      <h3>Lançamentos <small style="color:var(--mut)">valor sempre positivo — D debita, C credita</small></h3>
+      <div class="tbl-wrap">
+        <table id="tblCaixa"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ AGENDA ============ -->
+  <section class="screen" id="s-agenda">
+    <h2>🗓️ Agenda de eventos</h2>
+    <div class="card">
+      <div class="mnav">
+        <button class="btn" onclick="mNav(-1)">‹</button>
+        <b id="agLabel"></b>
+        <button class="btn" onclick="mNav(1)">›</button>
+        <span style="margin-left:auto;font-size:12px;color:var(--mut)" id="agResumo"></span>
+      </div>
+      <div class="cal" id="calGrid"></div>
+    </div>
+    <div class="card">
+      <h3 id="agListaTitle">Eventos do mês</h3>
+      <div id="agLista"></div>
+    </div>
+  </section>
+
+  <!-- ============ RELATÓRIOS ============ -->
+  <section class="screen" id="s-rel">
+    <h2>📈 Relatórios <button class="btn" onclick="window.print()">🖨️ Imprimir / PDF</button></h2>
+    <div class="card print-ok">
+      <h3>Recebimentos por mês × modalidade</h3>
+      <div class="tbl-wrap"><table id="r1"></table></div>
+    </div>
+    <div class="card print-ok">
+      <h3>Recebimentos por mês × tipo de festa</h3>
+      <div class="tbl-wrap"><table id="r2"></table></div>
+    </div>
+    <div class="card print-ok">
+      <h3>Previsão de recebimentos (a receber mês a mês) <small>gerada pela frequência de cada contrato</small></h3>
+      <div class="tbl-wrap"><table id="r3"></table></div>
+    </div>
+    <div class="card print-ok">
+      <h3>Eventos a realizar — dia a dia (próximos 120 dias)</h3>
+      <div class="tbl-wrap"><table id="r4"></table></div>
+    </div>
+    <div class="card print-ok">
+      <h3>Situação por evento — quanto falta receber</h3>
+      <div class="tbl-wrap"><table id="r5"></table></div>
+    </div>
+  </section>
+
+  <!-- ============ CONFIG ============ -->
+  <section class="screen" id="s-cfg">
+    <h2>⚙️ Configurações</h2>
+    <div class="card">
+      <h3>Empresa</h3>
+      <div class="frow">
+        <div><label>Nome da empresa</label><input id="cfgEmpresa" placeholder="Nome do cliente / empresa de festas"></div>
+        <div style="max-width:220px"><label>Código da nuvem (sync)</label><input id="cfgTopico" placeholder="ex.: festas-abc123"></div>
+      </div>
+      <button class="btn p" onclick="salvarCfg()">Salvar</button>
+      <div style="font-size:12px;color:var(--mut);margin-top:8px">O código da nuvem sincroniza os dados entre aparelhos (dono ↔ consultor). Use o <b>mesmo código</b> nos dois aparelhos. Precisa do app ntfy ou internet no navegador.</div>
+    </div>
+    <div class="card">
+      <h3>Planilhas Excel</h3>
+      <div class="frow">
+        <div><label>Importar planilha de eventos (.xlsx)</label><input type="file" id="impEv" accept=".xlsx,.xls" onchange="impEventos(this)"></div>
+        <div><label>Importar caixa simples (.xlsx)</label><input type="file" id="impCx" accept=".xlsx,.xls" onchange="impCaixa(this)"></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+        <button class="btn g" onclick="expXlsx()">⬇️ Exportar planilha integrada (.xlsx)</button>
+        <span style="font-size:12px;color:var(--mut);align-self:center">Gera RESUMO + FLUXO RECEBIM + CAIXA atualizados</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Dados</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" onclick="bkpJson()">💾 Backup JSON</button>
+        <div><input type="file" id="impJson" accept=".json" onchange="restJson(this)" style="padding:8px"></div>
+        <button class="btn" onclick="limparExemplos()">🧹 Remover dados de exemplo</button>
+        <button class="btn r" onclick="zerarTudo()">🗑️ Zerar tudo</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- modal evento -->
+<div class="modal-bg" id="mEv">
+  <div class="modal">
+    <h3 id="mEvTitle">Novo evento</h3>
+    <div class="frow">
+      <div style="max-width:150px"><label>Nº Registro</label><input id="eReg" placeholder="EV-0001"></div>
+      <div style="flex:2"><label>Cliente *</label><input id="eCli" placeholder="Nome do cliente"></div>
+    </div>
+    <div class="frow">
+      <div><label>Data ass. contrato</label><input type="date" id="eContrato"></div>
+      <div><label>Data da festa *</label><input type="date" id="eFesta"></div>
+    </div>
+    <div class="frow">
+      <div><label>Local da festa</label><input id="eLocal" placeholder="Cidade / salão"></div>
+      <div><label>Tipo de festa</label><input id="eTipo" list="dlTipos" placeholder="Casamento, 15 Anos..."></div>
+    </div>
+    <div class="frow">
+      <div><label>Valor total da festa (R$) *</label><input type="number" id="eVal" step="0.01" min="0"></div>
+      <div><label>Frequência de recebimento</label>
+        <select id="eFreq">
+          <option>MENSAL</option><option>15 EM 15 DIAS</option><option>SEMANAL</option><option>ÚNICO</option>
+        </select>
+      </div>
+      <div><label>Forma principal</label>
+        <select id="eForma"><option>PIX</option><option>DINHEIRO</option><option>CARTÃO</option><option>TRANSFERÊNCIA</option><option>BOLETO</option><option>OUTROS</option></select>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">
+      <button class="btn" onclick="fecha('mEv')">Cancelar</button>
+      <button class="btn p" onclick="salvarEvento()">Salvar evento</button>
+    </div>
+  </div>
+</div>
+
+<!-- modal parcelas -->
+<div class="modal-bg" id="mParc">
+  <div class="modal">
+    <h3 id="pTitle"></h3>
+    <div id="pBody"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+      <button class="btn" onclick="fecha('mParc')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+</body>
+</html>
