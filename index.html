@@ -301,9 +301,10 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
       <h3>Empresa</h3>
       <div class="frow">
         <div><label>Nome da empresa</label><input id="cfgEmpresa" placeholder="Nome do cliente / empresa de festas"></div>
-        <div style="max-width:220px"><label>Código da nuvem (sync)</label><input id="cfgTopico" placeholder="ex.: festas-abc123"></div>
+        <div style="max-width:220px"><label>Código da nuvem (sync) ★ principal</label><input id="cfgTopico" placeholder="ex.: festas-abc123"></div>
       </div>
       <button class="btn p" onclick="salvarCfg()">Salvar</button>
+      <div style="font-size:14px;color:var(--grn);margin-top:8px;font-weight:700">✅ RECOMENDADO: é só isso! Dono e consultor usam o MESMO código (ex.: casaencantada2026) e tudo sincroniza sozinho entre os aparelhos — sem planilha, sem cadastro, sem nada.</div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
         <label>Planilha Google (link /exec do Apps Script)</label>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
@@ -311,7 +312,7 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
           <button class="btn g" onclick="sheetPull()">⬇️ Puxar da planilha</button>
           <button class="btn p" onclick="sheetPushAgora()">⬆️ Enviar p/ planilha</button>
         </div>
-        <div style="font-size:14px;color:var(--mut);margin-top:8px;line-height:1.5">Com o link da planilha salvo aqui, <b>todo lançamento vai direto pra planilha</b> (e o botão ⬇️ traz o que foi digitado lá). Instrução de instalação: veja o arquivo <b>codigo-apps-script-gestao-festas.gs</b> — é colar na planilha uma vez só.</div>
+        <div style="font-size:14px;color:var(--mut);margin-top:8px;line-height:1.5">OPCIONAL (só se quiser espelhar numa planilha do Google): requer instalar o Apps Script — veja o arquivo <b>codigo-apps-script-gestao-festas.gs</b>. Se não usar planilha, ignore este campo: o código da nuvem acima já resolve tudo.</div>
       </div>
       <div style="font-size:14px;color:var(--mut);margin-top:8px;line-height:1.5">O código da nuvem sincroniza os dados entre aparelhos (dono ↔ consultor). Use o <b>mesmo código</b> nos dois aparelhos. Precisa do app ntfy ou internet no navegador.</div>
     </div>
@@ -1167,7 +1168,9 @@ function pubDB(){
 }
 function pullDB(){
   if(!TOPIC)return;
-  fetch('https://ntfy.sh/'+TOPIC+'/json?poll=1&since=12h')
+  const last=+DB._lastPull||0;
+  const since=last?Math.floor(last/1000):'all'; // 1a vez: pega tudo que existir no topico
+  fetch('https://ntfy.sh/'+TOPIC+'/json?poll=1&since='+since)
     .then(r=>r.json())
     .then(j=>{
       (j.messages||[]).forEach(m=>{
@@ -1233,7 +1236,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>navGo(b.dataset.s));
   document.querySelectorAll('.modal-bg').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('on')});
   initTheme();
-  if(TOPIC){pullDB();setInterval(pullDB,30000)}
+  if(TOPIC){pullDB();setInterval(pullDB,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){pullDB();pubDB()}})}
   // NUVEM-FIRST: se tem planilha Google, ela e a fonte da verdade
   if(SHEET){cloudFirst(); setInterval(cloudFirst,30000)}
 });
