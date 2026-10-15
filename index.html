@@ -296,6 +296,15 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
         <div style="max-width:220px"><label>Código da nuvem (sync)</label><input id="cfgTopico" placeholder="ex.: festas-abc123"></div>
       </div>
       <button class="btn p" onclick="salvarCfg()">Salvar</button>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+        <label>Planilha Google (link /exec do Apps Script)</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <input id="cfgSheet" placeholder="cole aqui o URL que termina em /exec" style="flex:1;min-width:220px">
+          <button class="btn g" onclick="sheetPull()">⬇️ Puxar da planilha</button>
+          <button class="btn p" onclick="sheetPushAgora()">⬆️ Enviar p/ planilha</button>
+        </div>
+        <div style="font-size:14px;color:var(--mut);margin-top:8px;line-height:1.5">Com o link da planilha salvo aqui, <b>todo lançamento vai direto pra planilha</b> (e o botão ⬇️ traz o que foi digitado lá). Instrução de instalação: veja o arquivo <b>codigo-apps-script-gestao-festas.gs</b> — é colar na planilha uma vez só.</div>
+      </div>
       <div style="font-size:14px;color:var(--mut);margin-top:8px;line-height:1.5">O código da nuvem sincroniza os dados entre aparelhos (dono ↔ consultor). Use o <b>mesmo código</b> nos dois aparelhos. Precisa do app ntfy ou internet no navegador.</div>
     </div>
     <div class="card">
@@ -397,7 +406,58 @@ function initTheme(){const t=localStorage.getItem('gestao_festas_tema');if(t&&TH
 const LS='gestao_festas_v1';
 let DB={eventos:[],caixa:[],seq:1,cfg:{empresa:'',topico:''},lastSeen:0};
 function load(){try{const r=localStorage.getItem(LS);if(r){const d=JSON.parse(r);DB={...{eventos:[],caixa:[],seq:1,cfg:{}},...d};}}catch(e){}}
-function save(){snapAuto();localStorage.setItem(LS,JSON.stringify(DB));pubDB();}
+let SHEET='';
+function save(){snapAuto();localStorage.setItem(LS,JSON.stringify(DB));pubDB();sheetPush();}
+function sheetPush(){
+  if(!SHEET)return;
+  clearTimeout(window._shT);
+  window._shT=setTimeout(()=>{
+    fetch(SHEET,{method:'POST',body:JSON.stringify({eventos:DB.eventos,caixa:DB.caixa})})
+      .then(r=>r.json()).then(j=>{if(j.ok){document.getElementById('cloudDot').classList.add('on')}})
+      .catch(()=>{});
+  },2000);
+}
+function sheetPull(){
+  if(!SHEET){toast('Cole o link da planilha no Config primeiro','err');return}
+  toast('Puxando da planilha...');
+  fetch(SHEET).then(r=>r.json()).then(j=>{
+    if(!j.ok)throw new Error('sem dados');
+    let ne=0,nc=0;
+    (j.eventos||[]).forEach(o=>{
+      const cli=String(o['CLIENTE']||'').replace(/\(EXEMPLO\)/i,'').trim();
+      const val=parseFloat(String(o['VR. TOTAL DA FESTA']||'0').replace(/[^\d,.-]/g,'').replace(',','.'))||0;
+      if(!cli||!val)return;
+      const festa=dstr(o['DATA DA FESTA']);
+      if(DB.eventos.some(x=>x.cli===cli&&x.festa===festa))return;
+      DB.eventos.push({id:uid(),reg:String(o['REGISTRO']||'').trim()||nextReg(),cli,contrato:dstr(o['DATA ASS. CONTRATO']),festa,local:String(o['LOCAL DA FESTA']||'').trim(),tipo:String(o['TIPO FESTA']||'').trim(),val,freq:String(o['FREQUENCIA DE RECEBIMENTO']||'MENSAL').trim(),forma:String(o['FORMA DE RECEBIMENTO']||'PIX').trim()});
+      ne++;
+    });
+    (j.caixa||[]).forEach(o=>{
+      const data=dstr(o['Data']);const desc=String(o['Descrição']||'').trim();
+      const val=parseFloat(String(o['Valor']||'0').replace(/[^\d,.-]/g,'').replace(',','.'))||0;
+      const dc=String(o['D ou C']||'').trim().toUpperCase().slice(0,1);
+      if(!data||!desc||!val||!dc)return;
+      if(DB.caixa.some(x=>x.data===data&&x.desc===desc&&x.val===val))return;
+      const cat=String(o['Categoria']||'OUTRA RECEITA').trim();
+      const reg=String(o['Registro']||'').trim();
+      const isEv=/EVENTO/i.test(cat)&&dc==='C';
+      let evId=null;if(isEv&&reg){const ev=evByReg(reg);if(ev)evId=ev.id}
+      DB.caixa.push({id:uid(),data,desc,cat,tipo:String(o['Tipo Festa']||'').trim(),dc,val,evId,reg:isEv?reg:'',forma:''});
+      nc++;
+    });
+    save();renderAll();
+    toast(ne+' evento(s) e '+nc+' lançamento(s) puxados da planilha','ok');
+  }).catch(e=>toast('Erro ao puxar: '+e.message+' — confira o link /exec','err'));
+}
+function sheetPushAgora(){
+  if(!SHEET){toast('Cole o link da planilha no Config primeiro','err');return}
+  toast('Enviando para a planilha...');
+  fetch(SHEET,{method:'POST',body:JSON.stringify({eventos:DB.eventos,caixa:DB.caixa})})
+    .then(r=>r.json()).then(j=>{
+      if(j.ok)toast('Planilha atualizada: '+j.eventos+' evento(s), '+j.caixa+' lançamento(s)','ok');
+      else toast('Erro na planilha: '+(j.erro||'?'),'err');
+    }).catch(e=>toast('Erro ao enviar: '+e.message,'err'));
+}
 /* ============ BACKUP AUTOMÁTICO (snapshots rotativos) ============ */
 function snapAuto(){
   try{
@@ -1072,6 +1132,8 @@ function pullDB(){
 /* ================= CONFIG ================= */
 function salvarCfg(){
   DB.cfg.empresa=document.getElementById('cfgEmpresa').value.trim();
+  SHEET=document.getElementById('cfgSheet').value.trim();
+  DB.cfg.sheet=SHEET;
   const novoT=document.getElementById('cfgTopico').value.trim();
   if(novoT!==TOPIC){TOPIC=novoT;DB.cfg.topico=novoT;DB._lastPull=0;save();pullDB()}
   else{DB.cfg.topico=novoT;save()}
@@ -1103,6 +1165,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   TOPIC=DB.cfg.topico||'';
   document.getElementById('cfgEmpresa').value=DB.cfg.empresa||'';
   document.getElementById('cfgTopico').value=TOPIC;
+  SHEET=DB.cfg.sheet||'';
+  document.getElementById('cfgSheet').value=SHEET;
   document.getElementById('cData').value=today();
   document.getElementById('cCat').innerHTML=CATEGORIAS.map(c=>`<option>${c}</option>`).join('');
   catChange();
