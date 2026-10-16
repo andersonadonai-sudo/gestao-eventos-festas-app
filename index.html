@@ -185,7 +185,7 @@ th.stik,th.stikL{z-index:3}
         <div class="tbl-wrap" id="proxEventos"></div>
       </div>
       <div class="card">
-        <h3>Por tipo de festa <small>contratado × recebido × falta</small></h3>
+        <h3>Por tipo de evento <small>contratado × recebido × falta</small></h3>
         <div class="tbl-wrap" id="tblTipos"></div>
       </div>
     </div>
@@ -214,7 +214,7 @@ th.stik,th.stikL{z-index:3}
         <div style="max-width:150px"><label>Data</label><input type="date" id="cData"></div>
         <div style="flex:2"><label>Descrição</label><input id="cDesc" placeholder="Ex.: Sinal casamento Silva / Aluguel som"></div>
         <div style="max-width:210px"><label>Categoria</label><select id="cCat" onchange="catChange()"></select></div>
-        <div style="max-width:150px"><label>Tipo festa</label><input id="cTipo" placeholder="—" list="dlTipos"></div>
+        <div style="max-width:150px"><label>Tipo de evento</label><input id="cTipo" placeholder="—" list="dlTipos"></div>
         <div style="max-width:140px"><label>D ou C</label><select id="cDC"><option value="C">C — Crédito</option><option value="D">D — Débito</option></select></div>
         <div style="max-width:140px"><label>Valor (R$)</label><input type="text" id="cVal" inputmode="numeric" placeholder="0,00" style="text-align:right;font-variant-numeric:tabular-nums"></div>
         <div style="max-width:190px"><label>Conta (origem/destino)</label>
@@ -268,7 +268,7 @@ th.stik,th.stikL{z-index:3}
       <div class="tbl-wrap"><table id="r1"></table></div>
     </div>
     <div class="card print-ok">
-      <h3>Recebimentos por mês × tipo de festa</h3>
+      <h3>Recebimentos por mês × tipo de evento</h3>
       <div class="tbl-wrap"><table id="r2"></table></div>
     </div>
     <div class="card print-ok">
@@ -280,7 +280,7 @@ th.stik,th.stikL{z-index:3}
       <div class="tbl-wrap"><table id="r4"></table></div>
     </div>
     <div class="card print-ok">
-      <h3>Resumo por tipo de festa — contratado × recebido × falta</h3>
+      <h3>Resumo por tipo de evento — contratado × recebido × falta</h3>
       <div class="tbl-wrap"><table id="r6"></table></div>
     </div>
     <div class="card print-ok">
@@ -309,6 +309,27 @@ th.stik,th.stikL{z-index:3}
       .swatch:hover{transform:translateY(-2px)}
       .swatch.on{border-color:var(--vio);box-shadow:0 0 0 3px rgba(124,92,255,.25)}
       </style>
+    </div>
+    <div class="card acc">
+      <h3>🗂️ Cadastros — incluir, alterar ou excluir</h3>
+      <div style="font-size:14px;color:var(--mut);margin-bottom:10px">Categorias do caixa, tipos de evento e contas. Alterar/excluir atualiza os lançamentos que usam o item.</div>
+      <div class="frow" style="align-items:flex-start">
+        <div style="flex:1;min-width:240px">
+          <label>Categorias do caixa</label>
+          <div id="cfgCats"></div>
+          <button class="btn sm p" onclick="cfgAdd('cats')">＋ Incluir categoria</button>
+        </div>
+        <div style="flex:1;min-width:240px">
+          <label>Tipos de evento</label>
+          <div id="cfgTipos"></div>
+          <button class="btn sm p" onclick="cfgAdd('tipos')">＋ Incluir tipo</button>
+        </div>
+        <div style="flex:1;min-width:240px">
+          <label>Contas (origem/destino)</label>
+          <div id="cfgContas"></div>
+          <button class="btn sm p" onclick="cfgAdd('contas')">＋ Incluir conta</button>
+        </div>
+      </div>
     </div>
     <div class="card">
       <h3>Empresa</h3>
@@ -396,7 +417,7 @@ th.stik,th.stikL{z-index:3}
     </div>
     <div class="frow">
       <div><label>Local da festa</label><input id="eLocal" placeholder="Cidade / salão"></div>
-      <div><label>Tipo de festa</label>
+      <div><label>Tipo de evento</label>
         <div style="display:flex;gap:6px">
           <input id="eTipo" list="dlTipos" placeholder="Casamento, 15 Anos...">
           <button class="btn sm" title="Novo tipo de festa" onclick="novoTipo()">＋</button>
@@ -458,7 +479,7 @@ th.stik,th.stikL{z-index:3}
     </div>
     <div class="frow">
       <div style="max-width:130px"><label>D ou C</label><select id="cxDc"><option value="C">C — Crédito</option><option value="D">D — Débito</option></select></div>
-      <div style="max-width:150px"><label>Tipo festa</label><input id="cxTipo" list="dlTipos" placeholder="—"></div>
+      <div style="max-width:150px"><label>Tipo de evento</label><input id="cxTipo" list="dlTipos" placeholder="—"></div>
       <div><label>Valor (R$)</label><input type="text" id="cxVal" inputmode="numeric" placeholder="0,00" style="text-align:right;font-variant-numeric:tabular-nums"></div>
     </div>
     <div class="frow">
@@ -549,7 +570,7 @@ function sheetPull(){
       if(!cli||!val)return;
       const festa=dstr(o['DATA DA FESTA']);
       if(DB.eventos.some(x=>x.cli===cli&&x.festa===festa))return;
-      DB.eventos.push({id:uid(),reg:String(o['REGISTRO']||'').trim()||nextReg(),cli,contrato:dstr(o['DATA ASS. CONTRATO']),festa,local:String(o['LOCAL DA FESTA']||'').trim(),tipo:String(o['TIPO FESTA']||'').trim(),val,freq:String(o['FREQUENCIA DE RECEBIMENTO']||'MENSAL').trim(),forma:String(o['FORMA DE RECEBIMENTO']||'PIX').trim()});
+      DB.eventos.push({id:uid(),reg:String(o['REGISTRO']||'').trim()||nextReg(),cli,contrato:dstr(o['DATA ASS. CONTRATO']),festa,local:String(o['LOCAL DA FESTA']||'').trim(),tipo:String(o['TIPO DE EVENTO']||'').trim(),val,freq:String(o['FREQUENCIA DE RECEBIMENTO']||'MENSAL').trim(),forma:String(o['FORMA DE RECEBIMENTO']||'PIX').trim()});
       ne++;
     });
     (j.caixa||[]).forEach(o=>{
@@ -562,7 +583,7 @@ function sheetPull(){
       const reg=String(o['Registro']||'').trim();
       const isEv=/EVENTO/i.test(cat)&&dc==='C';
       let evId=null;if(isEv&&reg){const ev=evByReg(reg);if(ev)evId=ev.id}
-      DB.caixa.push({id:uid(),_ts:Date.now()+(nc++),data,desc,cat,tipo:String(o['Tipo Festa']||'').trim(),dc,val,evId,reg:isEv?reg:'',forma:''});
+      DB.caixa.push({id:uid(),_ts:Date.now()+(nc++),data,desc,cat,tipo:String(o['Tipo de Evento']||'').trim(),dc,val,evId,reg:isEv?reg:'',forma:''});
       nc++;
     });
     save();renderAll();
@@ -579,7 +600,7 @@ function cloudFirst(){
       const cli=String(o['CLIENTE']||'').replace(/\(EXEMPLO\)/i,'').trim();
       const val=parseFloat(String(o['VR. TOTAL DA FESTA']||'0').replace(/[^\d,.-]/g,'').replace(',','.'))||0;
       if(!cli||!val)return;
-      evs.push({id:uid(),reg:String(o['REGISTRO']||'').trim()||nextReg(),cli,contrato:dstr(o['DATA ASS. CONTRATO']),festa:dstr(o['DATA DA FESTA']),local:String(o['LOCAL DA FESTA']||'').trim(),tipo:String(o['TIPO FESTA']||'').trim(),val,freq:String(o['FREQUENCIA DE RECEBIMENTO']||'MENSAL').trim(),forma:String(o['FORMA DE RECEBIMENTO']||'PIX').trim()});
+      evs.push({id:uid(),reg:String(o['REGISTRO']||'').trim()||nextReg(),cli,contrato:dstr(o['DATA ASS. CONTRATO']),festa:dstr(o['DATA DA FESTA']),local:String(o['LOCAL DA FESTA']||'').trim(),tipo:String(o['TIPO DE EVENTO']||'').trim(),val,freq:String(o['FREQUENCIA DE RECEBIMENTO']||'MENSAL').trim(),forma:String(o['FORMA DE RECEBIMENTO']||'PIX').trim()});
     });
     (j.caixa||[]).forEach(o=>{
       const data=dstr(o['Data']);const desc=String(o['Descricao']||o['Descri\u00e7\u00e3o']||'').trim();
@@ -591,7 +612,7 @@ function cloudFirst(){
       const isEv=/EVENTO/i.test(cat)&&dc==='C';
       let evId=null;
       if(isEv&&reg){const ev=evs.find(x=>String(x.reg).toUpperCase()===reg.toUpperCase());if(ev)evId=ev.id}
-      cxs.push({id:uid(),data,desc,cat,tipo:String(o['Tipo Festa']||'').trim(),dc,val,evId,reg:isEv?reg:'',forma:''});
+      cxs.push({id:uid(),data,desc,cat,tipo:String(o['Tipo de Evento']||'').trim(),dc,val,evId,reg:isEv?reg:'',forma:''});
     });
     // so aplica se mudou algo (evita re-render desnecessario)
     const antes=JSON.stringify([DB.eventos.length,DB.caixa.length,DB.eventos.map(e=>e.reg).join(),DB.caixa.map(c=>c.id).join()]);
@@ -1059,7 +1080,7 @@ function tblCaixa(){
   const el=document.getElementById('tblCaixa');
   const cx=DB.caixa.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')||((b._ts||0)-(a._ts||0)));
   if(!cx.length){el.innerHTML='<tr><td><div class="empty">Caixa vazio. Lance a primeira movimentação acima.</div></td></tr>';return}
-  let h='<tr><th>Data</th><th>Descrição</th><th class="opt">Categoria</th><th class="opt">Tipo festa</th><th>Registro</th><th>D/C</th><th class="num">Valor</th><th class="num">Saldo</th><th class="opt">Conta</th><th class="stik"></th></tr>';
+  let h='<tr><th>Data</th><th>Descrição</th><th class="opt">Categoria</th><th class="opt">Tipo de evento</th><th>Registro</th><th>D/C</th><th class="num">Valor</th><th class="num">Saldo</th><th class="opt">Conta</th><th class="stik"></th></tr>';
   // saldo acumulado em ordem cronológica
   const ord=DB.caixa.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   let s=0;const saldos={};
@@ -1163,7 +1184,7 @@ function relatorios(){
   const byT={};
   DB.eventos.forEach(e=>{const t=(e.tipo||'NÃO INFORMADO').toUpperCase();byT[t]=byT[t]||{n:0,tot:0,rec:0};byT[t].n++;byT[t].tot+=(+e.val||0);byT[t].rec+=(e.rec||0)});
   const tk=Object.keys(byT);
-  let h6='<tr><th>Tipo de festa</th><th class="num">Eventos</th><th class="num">Contratado</th><th class="num">Recebido</th><th class="num">Falta</th><th class="num">% recebido</th></tr>';
+  let h6='<tr><th>Tipo de evento</th><th class="num">Eventos</th><th class="num">Contratado</th><th class="num">Recebido</th><th class="num">Falta</th><th class="num">% recebido</th></tr>';
   tk.sort((a,b)=>byT[b].tot-byT[a].tot).forEach(t=>{
     const x=byT[t];const pct=x.tot?Math.round(x.rec/x.tot*100):0;
     h6+=`<tr><td><b>${esc(t)}</b></td><td class="num">${x.n}</td><td class="num">${money(x.tot)}</td><td class="num pos">${money(x.rec)}</td><td class="num ${x.tot-x.rec>0.005?'neg':''}">${money(Math.max(0,x.tot-x.rec))}</td><td class="num">${pct}%</td></tr>`;
@@ -1276,7 +1297,7 @@ function expXlsx(){
   calcEventos();
   // PLANILHA RESUMO — mesma estrutura da original (título + cabeçalho na 2ª linha)
   const res=[['','PROGRAMAÇÃO DE RECEBIMENTOS - FESTAS'],
-    ['DATA ASS. CONTRATO','DATA DA FESTA','CLIENTE','LOCAL DA FESTA','TIPO FESTA','REGISTRO','VR. TOTAL DA FESTA','VR. JÁ RECEBIDO','FREQUENCIA DE RECEBIMENTO','FORMA DE RECEBIMENTO','FALTA RECEBER']];
+    ['DATA ASS. CONTRATO','DATA DA FESTA','CLIENTE','LOCAL DA FESTA','TIPO DE EVENTO','REGISTRO','VR. TOTAL DA FESTA','VR. JÁ RECEBIDO','FREQUENCIA DE RECEBIMENTO','FORMA DE RECEBIMENTO','FALTA RECEBER']];
   DB.eventos.forEach(e=>res.push([e.contrato,e.festa,e.cli,e.local||'',e.tipo||'',e.reg,e.val,e.rec,e.freq||'',e.forma||'',e.falta]));
   // PLANILHA FLUXO RECEBIM — com as parciais reais do caixa
   const flu=[['','PROGRAMAÇÃO DE RECEBIMENTOS - FESTAS'],
@@ -1288,7 +1309,7 @@ function expXlsx(){
     flu.push(row);
   });
   // Controle de Caixa — mesma coluna da original, com Saldo calculado
-  const cx=[['Data','Descrição','Categoria','Tipo Festa','Registro','D ou C','Valor','Saldo']];
+  const cx=[['Data','Descrição','Categoria','Tipo de Evento','Registro','D ou C','Valor','Saldo']];
   let s=0;
   DB.caixa.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||'')).forEach(c=>{
     s+=c.dc==='D'?-(+c.val||0):(+c.val||0);
@@ -1370,6 +1391,7 @@ function pullDB(){
 
 /* ================= CONFIG ================= */
 function salvarCfg(){
+  if(CATEGORIAS.length)DB.cfg.categorias=CATEGORIAS.slice();
   DB.cfg.empresa=document.getElementById('cfgEmpresa').value.trim();
   SHEET=document.getElementById('cfgSheet').value.trim();
   DB.cfg.sheet=SHEET;
@@ -1422,7 +1444,7 @@ function renderFreqs(){
 }
 function novoTipo(){
   const atual=document.getElementById('eTipo').value.trim();
-  const t=prompt('Novo tipo de festa (ex.: Bodas de Prata):');
+  const t=prompt('Novo tipo de evento (ex.: Bodas de Prata):');
   if(!t)return;
   const tipos=getTipos();
   if(!tipos.includes(t.trim())){DB.cfg.tipos=[...tipos,t.trim()];save()}
@@ -1438,6 +1460,74 @@ function novaFreq(){
   renderFreqs();
   document.getElementById('eFreq').value=f.trim().toUpperCase();
   toast('Frequência "'+f.trim().toUpperCase()+'" cadastrada','ok');
+}
+
+/* ================= GESTÃO DE CADASTROS (Config) ================= */
+const CFG_LISTAS={
+  cats:{get:()=>CATEGORIAS.slice(),set:v=>{CATEGORIAS.length=0;CATEGORIAS.push(...v);DB.cfg.categorias=v.slice()}},
+  tipos:{get:()=>getTipos(),set:v=>{DB.cfg.tipos=v.slice()}},
+  contas:{get:()=>getContas(),set:v=>{DB.cfg.contas=v.slice()}}
+};
+const CFG_CAMPOS={cats:'cCat',tipos:'cTipo',contas:'cConta'};
+function cfgRender(){
+  const cont={cats:'cfgCats',tipos:'cfgTipos',contas:'cfgContas'};
+  const ondeUso={cats:'caixa (categoria)',tipos:'eventos e caixa (tipo)',contas:'caixa (conta)'};
+  Object.keys(cont).forEach(k=>{
+    const el=document.getElementById(cont[k]);if(!el)return;
+    const itens=CFG_LISTAS[k].get();
+    el.innerHTML=itens.length?('<table style="margin:0">'+itens.map((it,i)=>`<tr><td>${esc(it)}</td><td style="width:76px;text-align:right;white-space:nowrap"><button class="btn sm" onclick="cfgEdit('${k}',${i})" title="Alterar">✏️</button> <button class="btn sm r" onclick="cfgDel('${k}',${i})" title="Excluir">✕</button></td></tr>`).join('')+'</table>'):'<div class="empty">vazio</div>';
+  });
+}
+function cfgAdd(k){
+  const nome=k==='cats'?'categoria':(k==='tipos'?'tipo de evento':'conta (ex.: PIX NUBANK)');
+  const t=prompt('Nova '+nome+':');
+  if(!t||!t.trim())return;
+  const v=t.trim();
+  const itens=CFG_LISTAS[k].get();
+  const novo=k==='tipos'?v:v.toUpperCase();
+  if(itens.map(x=>x.toUpperCase()).includes(novo.toUpperCase())){toast('Já existe "'+v+'"','err');return}
+  CFG_LISTAS[k].set([...itens,novo]);
+  save();cfgRender();renderAll();
+  toast(novo+' incluído','ok');
+}
+function cfgEdit(k,i){
+  const itens=CFG_LISTAS[k].get();
+  const atual=itens[i];if(atual==null)return;
+  const nome=k==='cats'?'categoria':(k==='tipos'?'tipo de evento':'conta');
+  const t=prompt('Alterar '+nome+' "'+atual+'" para:',atual);
+  if(!t||!t.trim()||t.trim()===atual)return;
+  const novo=k==='tipos'?t.trim():t.trim().toUpperCase();
+  if(itens.some((x,j)=>j!==i&&x.toUpperCase()===novo.toUpperCase())){toast('Já existe "'+t.trim()+'"','err');return}
+  // atualiza em cascata nos registros
+  let n=0;
+  if(k==='cats'){DB.caixa.forEach(c=>{if((c.cat||'').toUpperCase()===atual.toUpperCase()){c.cat=novo;n++}})}
+  if(k==='tipos'){DB.eventos.forEach(e=>{if((e.tipo||'').trim().toUpperCase()===atual.toUpperCase()){e.tipo=novo;n++}});DB.caixa.forEach(c=>{if((c.tipo||'').trim().toUpperCase()===atual.toUpperCase()){c.tipo=novo;n++}})}
+  if(k==='contas'){DB.caixa.forEach(c=>{if((c.forma||'').toUpperCase()===atual.toUpperCase()){c.forma=novo;n++}})}
+  const v=itens.slice();v[i]=novo;
+  CFG_LISTAS[k].set(v);
+  save();cfgRender();renderAll();
+  toast(novo+' alterado'+(n?` (${n} lançamento${n>1?'s':''} atualizado${n>1?'s':''})`:''),'ok');
+}
+function cfgDel(k,i){
+  const itens=CFG_LISTAS[k].get();
+  const atual=itens[i];if(atual==null)return;
+  // quantos registros usam?
+  let usos=0;
+  if(k==='cats')usos=DB.caixa.filter(c=>(c.cat||'').toUpperCase()===atual.toUpperCase()).length;
+  if(k==='tipos')usos=DB.eventos.filter(e=>(e.tipo||'').trim().toUpperCase()===atual.toUpperCase()).length+DB.caixa.filter(c=>(c.tipo||'').trim().toUpperCase()===atual.toUpperCase()).length;
+  if(k==='contas')usos=DB.caixa.filter(c=>(c.forma||'').toUpperCase()===atual.toUpperCase()).length;
+  let msg='Excluir "'+atual+'" da lista?';
+  if(usos)msg=`"${atual}" está em uso por ${usos} registro${usos>1?'s':''} (caixa/eventos).\n\nOK = excluir da lista E limpar o campo desses registros (fica em branco).`;
+  if(!confirm(msg))return;
+  if(usos){
+    if(k==='cats')DB.caixa.forEach(c=>{if((c.cat||'').toUpperCase()===atual.toUpperCase())c.cat=''});
+    if(k==='tipos'){DB.eventos.forEach(e=>{if((e.tipo||'').trim().toUpperCase()===atual.toUpperCase())e.tipo=''});DB.caixa.forEach(c=>{if((c.tipo||'').trim().toUpperCase()===atual.toUpperCase())c.tipo=''})}
+    if(k==='contas')DB.caixa.forEach(c=>{if((c.forma||'').toUpperCase()===atual.toUpperCase())c.forma=''});
+  }
+  const v=itens.filter((_,j)=>j!==i);
+  CFG_LISTAS[k].set(v);
+  save();cfgRender();renderAll();
+  toast('"'+atual+'" excluído'+(usos?` (${usos} registro${usos>1?'s':''} limpo${usos>1?'s':''})`:''),'ok');
 }
 
 /* ================= LOGO CUSTOMIZÁVEL ================= */
@@ -1490,6 +1580,7 @@ function renderAll(){
   const tipos=[...new Set(DB.eventos.map(e=>e.tipo).filter(Boolean))];
   document.getElementById('dlTipos').innerHTML=tipos.map(t=>`<option value="${esc(t)}">`).join('');
   renderFreqs();
+  cfgRender();
   document.getElementById('tEmpresa').textContent=DB.cfg.empresa||'Casa Encantada Eventos';
 }
 window.addEventListener('DOMContentLoaded',()=>{
@@ -1508,7 +1599,9 @@ window.addEventListener('DOMContentLoaded',()=>{
   renderAll();
   // seed automatico REMOVIDO: zerou fica em branco de verdade (exemplos so via botao no Config)
   document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>navGo(b.dataset.s));
+  if(DB.cfg.categorias&&DB.cfg.categorias.length){CATEGORIAS.length=0;CATEGORIAS.push(...DB.cfg.categorias)}
   renderContas();
+  cfgRender();
   ['eVal','cVal'].forEach(id=>{const el=document.getElementById(id);if(el){el.addEventListener('input',()=>maskMoeda(el));el.setAttribute('type','text');el.setAttribute('inputmode','numeric');el.setAttribute('placeholder','0,00');el.style.textAlign='right'}});
   document.querySelectorAll('.modal-bg').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('on')});
   aplicaLogo();
