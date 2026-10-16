@@ -120,6 +120,10 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
 .toast.ok{border-color:var(--grn)}
 .empty{text-align:center;color:var(--mut);padding:26px 10px;font-size:15px;line-height:1.5}
 .reg-hint{background:rgba(212,175,55,.1);border:1px solid rgba(212,175,55,.4);border-radius:10px;padding:12px 14px;font-size:14px;color:var(--gold);margin-bottom:10px;display:none;line-height:1.5}
+.stik{position:sticky;right:0;background:var(--card);box-shadow:-10px 0 14px -6px rgba(0,0,0,.55);z-index:2}
+.stikL{position:sticky;left:0;background:var(--card);box-shadow:10px 0 14px -6px rgba(0,0,0,.55);z-index:2}
+th.stik,th.stikL{z-index:3}
+@media(max-width:900px){.opt{display:none}}
 .prog{height:7px;background:var(--card2);border-radius:99px;overflow:hidden;min-width:70px}
 .prog i{display:block;height:100%;background:linear-gradient(90deg,var(--vio),var(--grn));border-radius:99px}
 @media(max-width:900px){
@@ -854,23 +858,23 @@ function tblEventos(){
   if(!DB.eventos.length){el.innerHTML='<tr><td><div class="empty">Nenhum evento. Clique em "Novo evento" — o Nº de registro é gerado automaticamente (EV-0001, EV-0002...)</div></td></tr>';return}
   calcEventos();
   const ev=DB.eventos.slice().sort((a,b)=>(b.festa||'').localeCompare(a.festa||''));
-  let h='<tr><th>Registro</th><th>Cliente</th><th>WhatsApp</th><th>Contrato</th><th>Festa</th><th>Local</th><th>Tipo</th><th class="num">Total</th><th class="num">Recebido</th><th class="num">Falta</th><th>Progresso</th><th></th></tr>';
+  let h='<tr><th class="stikL">Registro</th><th>Cliente</th><th>WhatsApp</th><th class="opt">Contrato</th><th>Festa</th><th class="opt">Local</th><th>Tipo</th><th class="num">Total</th><th class="num">Recebido</th><th class="num">Falta</th><th>Progresso</th><th class="stik"></th></tr>';
   ev.forEach(e=>{
     const pct=e.val?Math.min(100,Math.round(e.rec/e.val*100)):0;
     const hoje=today();
     const st=e.festa<hoje?(e.falta>0.005?'b-red':'b-grn'):(e.falta>0.005?'b-org':'b-grn');
     const stt=e.festa<hoje?(e.falta>0.005?'REALIZADO — A RECEBER':'REALIZADO ✓'):(e.falta>0.005?'A RECEBER':'PAGO ✓');
     h+=`<tr>
-      <td><span class="badge b-vio">${esc(e.reg)}</span></td>
+      <td class="stikL"><span class="badge b-vio">${esc(e.reg)}</span></td>
       <td><b>${esc(e.cli)}</b></td>
       <td>${e.tel?`<a class="badge b-grn" style="text-decoration:none" target="_blank" href="https://wa.me/55${esc(e.tel).replace(/\D/g,'')}">💬 ${esc(e.tel)}</a>`:'<span style="color:var(--mut)">—</span>'}</td>
-      <td>${fmtD(e.contrato)}</td><td>${fmtD(e.festa)}</td>
-      <td>${esc(e.local||'—')}</td><td>${esc(e.tipo||'—')}</td>
+      <td class="opt">${fmtD(e.contrato)}</td><td>${fmtD(e.festa)}</td>
+      <td class="opt">${esc(e.local||'—')}</td><td>${esc(e.tipo||'—')}</td>
       <td class="num">${money(e.val)}</td>
       <td class="num pos">${money(e.rec)}</td>
       <td class="num ${e.falta>0.005?'neg':''}">${money(e.falta)}</td>
       <td><div style="display:flex;align-items:center;gap:8px"><div class="prog"><i style="width:${pct}%"></i></div><span style="font-size:11px">${pct}%</span> <span class="badge ${st}" style="margin-left:4px">${stt}</span></div></td>
-      <td style="white-space:nowrap">
+      <td class="stik" style="white-space:nowrap">
         <button class="btn sm" onclick="verParcelas('${e.id}')">👁️</button>
         <button class="btn sm" onclick="formEvento('${e.id}')">✏️</button>
         <button class="btn sm r" onclick="delEvento('${e.id}')">✕</button>
@@ -972,19 +976,19 @@ function tblCaixa(){
   const el=document.getElementById('tblCaixa');
   const cx=DB.caixa.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||''));
   if(!cx.length){el.innerHTML='<tr><td><div class="empty">Caixa vazio. Lance a primeira movimentação acima.</div></td></tr>';return}
-  let h='<tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo festa</th><th>Registro</th><th>D/C</th><th class="num">Valor</th><th class="num">Saldo</th><th></th></tr>';
+  let h='<tr><th>Data</th><th>Descrição</th><th class="opt">Categoria</th><th class="opt">Tipo festa</th><th>Registro</th><th>D/C</th><th class="num">Valor</th><th class="num">Saldo</th><th class="stik"></th></tr>';
   // saldo acumulado em ordem cronológica
   const ord=DB.caixa.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   let s=0;const saldos={};
   ord.forEach(c=>{s+=c.dc==='D'?-(+c.val||0):(+c.val||0);saldos[c.id]=s});
   cx.forEach(c=>{
     const e=c.evId?DB.eventos.find(x=>x.id===c.evId):null;
-    h+=`<tr><td>${fmtD(c.data)}</td><td>${esc(c.desc)}</td><td>${esc(c.cat)}</td><td>${esc(c.tipo||'—')}</td>
+    h+=`<tr><td>${fmtD(c.data)}</td><td>${esc(c.desc)}</td><td class="opt">${esc(c.cat)}</td><td class="opt">${esc(c.tipo||'—')}</td>
     <td>${e?`<span class="badge b-vio" title="${esc(e.cli)}">${esc(c.reg||'')}</span>`:(c.reg?'<span class="badge b-red">sem vínculo</span>':'—')}</td>
     <td><span class="badge ${c.dc==='C'?'b-grn':'b-red'}">${c.dc}</span></td>
     <td class="num ${c.dc==='C'?'pos':'neg'}">${money(c.val)}</td>
     <td class="num" style="color:var(--mut)">${money(saldos[c.id])}</td>
-    <td><button class="btn sm r" onclick="delCaixa('${c.id}')">✕</button></td></tr>`;
+    <td class="stik"><button class="btn sm r" onclick="delCaixa('${c.id}')">✕</button></td></tr>`;
   });
   el.innerHTML=h;
 }
