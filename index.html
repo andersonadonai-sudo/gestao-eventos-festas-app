@@ -1682,7 +1682,9 @@ function pubDB(){
 }
 function syncAgora(){
   toast('Sincronizando com a nuvem...','ok');
-  publicaAgora().then(()=>pullDB(true)).then(()=>toast('Sincronizado — base unificada','ok'));
+  pullDB(true); // 1º: recebe o que os outros aparelhos lançaram
+  setTimeout(()=>publicaAgora(),1200); // 2º: publica a base unificada
+  setTimeout(()=>toast('Sincronizado — base unificada','ok'),2500);
 }
 function pullDB(forcar){
   if(!TOPIC)return;
@@ -1713,6 +1715,23 @@ function pullDB(forcar){
     })
     .catch(()=>{document.getElementById('cloudDot').classList.remove('on')});
 }
+function mergeNuvem(local,remoto){
+  const evMap=new Map();
+  [...(local.eventos||[]),...(remoto.eventos||[])].forEach(e=>{
+    const cur=evMap.get(e.id);
+    if(!cur)evMap.set(e.id,e);
+    else{ // conflito: mantém o registro com mais dados preenchidos (campos não nulos ganham)
+      const campos=(o)=>Object.keys(o).filter(k=>k!=='id'&&o[k]!==''&&o[k]!=null&&o[k]!==0).length;
+      evMap.set(e.id,campos(e)>=campos(cur)?e:cur);
+    }
+  });
+  const cxMap=new Map();
+  [...(local.caixa||[]),...(remoto.caixa||[])].forEach(c=>{
+    const cur=cxMap.get(c.id);
+    if(!cur||(c._ts||0)>(cur._ts||0))cxMap.set(c.id,c);
+  });
+  return {eventos:[...evMap.values()],caixa:[...cxMap.values()],seq:Math.max(local.seq||1,remoto.seq||1)};
+}
 async function aplicarNuvem(t,s){
   try{
     let db;
@@ -1730,7 +1749,11 @@ async function aplicarNuvem(t,s){
     }
     if(!db)return;
     DB._lastPull=t;
-    DB.eventos=db.eventos||[];DB.caixa=db.caixa||[];
+    const antes={eventos:DB.eventos.length,caixa:DB.caixa.length};
+    const m=mergeNuvem({eventos:DB.eventos,caixa:DB.caixa,seq:DB.seq},db);
+    DB.eventos=m.eventos;DB.caixa=m.caixa;DB.seq=m.seq;
+    const depois={eventos:DB.eventos.length,caixa:DB.caixa.length};
+    const ganhou=(depois.eventos>antes.eventos||depois.caixa>antes.caixa);
     let topicoMudou=false;
     if(db.cfg&&typeof db.cfg==='object'){
       DB.cfg={...DB.cfg,...db.cfg};
@@ -1747,7 +1770,8 @@ async function aplicarNuvem(t,s){
     if(document.getElementById('mLogin').classList.contains('on')&&!getSessao())abreLogin();
     else if(precisaLogin()&&!getSessao())abreLogin();
     document.getElementById('cloudDot').classList.add('on');
-    toast('Nuvem sincronizada — base mais recente aplicada','ok');
+    if(ganhou){setTimeout(()=>publicaAgora(),1500)} // propaga a base unificada pros outros aparelhos
+    toast(ganhou?'Sincronizado — '+depois.eventos+' evento(s), '+depois.caixa+' lançamento(s) na base':'Já estava atualizado','ok');
   }catch(e){}
 }
 
