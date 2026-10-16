@@ -439,6 +439,7 @@ th.stik,th.stikL{z-index:3}
     </div>
     <div class="frow">
       <div><label>Valor total da festa (R$) *</label><input type="text" id="eVal" inputmode="numeric" placeholder="0,00" style="text-align:right;font-variant-numeric:tabular-nums"></div>
+      <div><label>Saldo devedor (já pago antes do sistema) <small>opcional</small></label><input type="text" id="eDev" inputmode="numeric" placeholder="0,00" style="text-align:right;font-variant-numeric:tabular-nums"></div>
       <div><label>Frequência de recebimento</label>
         <div style="display:flex;gap:6px">
           <select id="eFreq"></select>
@@ -855,7 +856,7 @@ function recebidoEv(eid){
 }
 function calcEventos(){
   DB.eventos.forEach(e=>{
-    e.rec=recebidoEv(e.id);
+    e.rec=recebidoEv(e.id)+(+e.dev||0); // dev = já pago antes do sistema (não passa pelo caixa)
     e.falta=Math.max(0,(+e.val||0)-e.rec);
   });
 }
@@ -1015,6 +1016,7 @@ function formEvento(id){
   document.getElementById('eLocal').value=e?e.local:'';
   document.getElementById('eTipo').value=e?e.tipo:'';
   document.getElementById('eVal').value=e?(+e.val?e.val.toLocaleString('pt-BR',{minimumFractionDigits:2}):''):'';
+  document.getElementById('eDev').value=e&&e.dev?(+e.dev).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
   renderFreqs();
   document.getElementById('eFreq').value=e?(e.freq||'MENSAL'):'MENSAL';
   document.getElementById('eForma').value=e?(e.forma||'PIX'):'PIX';
@@ -1033,7 +1035,8 @@ function salvarEvento(){
     festa:festa,local:document.getElementById('eLocal').value.trim(),
     tipo:document.getElementById('eTipo').value.trim(),
     val:val,freq:document.getElementById('eFreq').value,
-    forma:document.getElementById('eForma').value
+    forma:document.getElementById('eForma').value,
+    dev:valorDo(document.getElementById('eDev'))
   };
   if(evEdit){const i=DB.eventos.findIndex(x=>x.id===evEdit);DB.eventos[i]=obj}
   else DB.eventos.push(obj);
@@ -1108,6 +1111,7 @@ function verParcelas(id){
   const pgs=DB.caixa.filter(c=>c.evId===id&&c.dc==='C').sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   let h=`<div style="font-size:13px;color:var(--mut);margin-bottom:10px">Registro <span class="badge b-vio">${esc(e.reg)}</span> · Total <b>${money(e.val)}</b> · Recebido <b class="pos">${money(e.rec)}</b> · Falta <b class="neg">${money(e.falta)}</b></div>`;
   h+='<table><tr><th>#</th><th>Data</th><th>Forma</th><th class="num">Valor</th><th>Origem</th></tr>';
+  if(e.dev)h+=`<tr><td>—</td><td>antes do sistema</td><td>${esc(e.forma||'—')}</td><td class="num pos">${money(e.dev)}</td><td><span class="badge b-org">saldo devedor</span></td></tr>`;
   if(!pgs.length)h+='<tr><td colspan="5"><div class="empty">Nenhum recebimento lançado no caixa com o registro '+esc(e.reg)+'</div></td></tr>';
   pgs.forEach((p,i)=>{h+=`<tr><td>${i+1}ª</td><td>${fmtD(p.data)}</td><td>${esc(p.forma||'—')}</td><td class="num pos">${money(p.val)}</td><td><span class="badge b-mut">caixa</span></td></tr>`});
   h+='</table>';
@@ -1774,6 +1778,10 @@ function renderAll(){
   renderFreqs();
   cfgRender();
   cfgUsersRender();
+  const cc=document.getElementById('cCat');
+  if(cc)cc.innerHTML=CATEGORIAS.map(c=>`<option>${esc(c)}</option>`).join('');
+  const cxc=document.getElementById('cxCat');
+  if(cxc&&document.getElementById('mCxED').classList.contains('on'))cxc.innerHTML=CATEGORIAS.map(c=>`<option>${esc(c)}</option>`).join('');
   document.getElementById('tEmpresa').textContent=DB.cfg.empresa||EMP.nome;
 }
 window.addEventListener('DOMContentLoaded',()=>{
@@ -1799,7 +1807,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   renderSelEmp();
   document.getElementById('selEmp').value=EMP.id;
   aplicarAcesso();
-  ['eVal','cVal'].forEach(id=>{const el=document.getElementById(id);if(el){el.addEventListener('input',()=>maskMoeda(el));el.setAttribute('type','text');el.setAttribute('inputmode','numeric');el.setAttribute('placeholder','0,00');el.style.textAlign='right'}});
+  ['eVal','cVal','eDev'].forEach(id=>{const el=document.getElementById(id);if(el){el.addEventListener('input',()=>maskMoeda(el));el.setAttribute('type','text');el.setAttribute('inputmode','numeric');el.setAttribute('placeholder','0,00');el.style.textAlign='right'}});
   document.querySelectorAll('.modal-bg').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('on')});
   aplicaLogo();
   document.getElementById('loginLogoImg').src=DB.cfg.logo||document.querySelector('#logoImg').src;
