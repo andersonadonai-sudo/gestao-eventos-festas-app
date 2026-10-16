@@ -148,6 +148,8 @@ th.stik,th.stikL{z-index:3}
     <div class="sub">Caixa + Contratos + Recebimentos — integrado</div>
   </div>
   <div class="top-right">
+    <select id="selEmp" onchange="trocarEmpresa(this.value)" title="Trocar de empresa" style="max-width:210px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--tx);font-weight:700;font-size:13px"></select>
+    <button class="btn sm" id="btnSair" onclick="sair()" style="display:none" title="Sair da conta">⏻ Sair</button>
     <div class="saldo-pill"><span class="cloud-dot" id="cloudDot"></span>Saldo caixa: <b id="tSaldo">R$ 0,00</b></div>
   </div>
 </div>
@@ -309,6 +311,12 @@ th.stik,th.stikL{z-index:3}
       .swatch:hover{transform:translateY(-2px)}
       .swatch.on{border-color:var(--vio);box-shadow:0 0 0 3px rgba(124,92,255,.25)}
       </style>
+    </div>
+    <div class="card acc">
+      <h3>👥 Usuários de acesso <small>login e senha por pessoa</small></h3>
+      <div style="font-size:14px;color:var(--mut);margin-bottom:10px">Admin vê o Config e gerencia usuários. Usuário comum usa o sistema sem acesso ao Config. Cada empresa tem seus próprios usuários.</div>
+      <div id="cfgUsers"></div>
+      <button class="btn sm p" onclick="userAdd()">＋ Incluir usuário</button>
     </div>
     <div class="card acc">
       <h3>🗂️ Cadastros — incluir, alterar ou excluir</h3>
@@ -498,18 +506,92 @@ th.stik,th.stikL{z-index:3}
   <div class="modal" style="max-width:380px;text-align:center">
     <div style="width:72px;height:72px;margin:0 auto 10px;border-radius:50%;overflow:hidden;background:#111" id="loginLogo"><img id="loginLogoImg" src="" style="width:100%;height:100%;object-fit:cover" alt=""></div>
     <h3 style="margin-bottom:4px" id="loginTitle">Casa Encantada Eventos</h3>
-    <div style="font-size:14px;color:var(--mut);margin-bottom:14px">Digite a senha para entrar</div>
-    <input type="password" id="loginPass" inputmode="numeric" maxlength="8" placeholder="••••" style="text-align:center;font-size:24px;letter-spacing:8px" onkeydown="if(event.key==='Enter')tentaLogin()">
+    <div style="font-size:14px;color:var(--mut);margin-bottom:14px" id="loginSub">Entre com usuário e senha</div>
+    <input type="text" id="loginUser" placeholder="usuário" autocomplete="username" style="text-align:center;font-size:16px;margin-bottom:8px" onkeydown="if(event.key==='Enter')tentaLogin()">
+    <input type="password" id="loginPass" placeholder="••••" style="text-align:center;font-size:20px;letter-spacing:4px" onkeydown="if(event.key==='Enter')tentaLogin()">
     <div id="loginErr" style="color:var(--red);font-size:13px;margin-top:8px;display:none">Senha incorreta</div>
     <button class="btn p" style="width:100%;margin-top:14px;justify-content:center" onclick="tentaLogin()">Entrar</button>
   </div>
 </div>
 <script>
+function usuarios(){return DB.cfg.usuarios||[]}
+function getSessao(){try{return JSON.parse(sessionStorage.getItem('gestao_festas_sessao'))}catch(e){return null}}
+function precisaLogin(){return usuarios().length>0||!!DB.cfg.senha}
+function abreLogin(){
+  const us=usuarios();
+  document.getElementById('loginTitle').textContent=DB.cfg.empresa||EMP.nome;
+  document.getElementById('loginUser').style.display=us.length?'block':'none';
+  document.getElementById('loginSub').textContent=us.length?'Entre com usuário e senha':'Digite a senha para entrar';
+  document.getElementById('mLogin').classList.add('on');
+  setTimeout(()=>document.getElementById(us.length?'loginUser':'loginPass').focus(),200);
+}
 function tentaLogin(){
-  const v=document.getElementById('loginPass').value;
-  const ok=(!DB.cfg.senha)||v===DB.cfg.senha;
-  if(ok){document.getElementById('mLogin').classList.remove('on');document.getElementById('loginPass').value='';document.getElementById('loginErr').style.display='none'}
-  else{document.getElementById('loginErr').style.display='block';document.getElementById('loginPass').value=''}
+  const us=usuarios();
+  const p=document.getElementById('loginPass').value;
+  let sess=null;
+  if(us.length){
+    const u=document.getElementById('loginUser').value.trim().toLowerCase();
+    const f=us.find(x=>(x.u||'').toLowerCase()===u&&x.p===p);
+    if(f)sess={u:f.u,nome:f.nome||f.u,adm:!!f.adm};
+  }else if(p===DB.cfg.senha){sess={u:'dono',nome:'Dono',adm:true}}
+  if(sess){
+    sessionStorage.setItem('gestao_festas_sessao',JSON.stringify(sess));
+    document.getElementById('mLogin').classList.remove('on');
+    document.getElementById('loginPass').value='';document.getElementById('loginUser').value='';
+    document.getElementById('loginErr').style.display='none';
+    aplicarAcesso();
+  }else{
+    document.getElementById('loginErr').style.display='block';
+    document.getElementById('loginPass').value='';
+  }
+}
+function sair(){sessionStorage.removeItem('gestao_festas_sessao');location.reload()}
+function aplicarAcesso(){
+  const s=getSessao();
+  const btn=document.getElementById('btnSair');
+  if(s&&precisaLogin()){btn.style.display='inline-flex';btn.textContent='⏻ '+s.nome}
+  else btn.style.display='none';
+  const cfgBtn=document.querySelector('nav button[data-s="cfg"]');
+  const comum=s&&precisaLogin()&&!s.adm;
+  if(cfgBtn)cfgBtn.style.display=comum?'none':'';
+  if(comum&&document.getElementById('s-cfg').classList.contains('on'))navGo('dash');
+}
+function cfgUsersRender(){
+  const el=document.getElementById('cfgUsers');if(!el)return;
+  const us=usuarios();
+  el.innerHTML=us.length?('<table style="margin:0">'+us.map((x,i)=>`<tr><td><b>${esc(x.u)}</b></td><td>${esc(x.nome||'')}</td><td>${x.adm?'<span class="badge b-grn">admin</span>':'<span class="badge b-mut">comum</span>'}</td><td style="width:76px;text-align:right;white-space:nowrap"><button class="btn sm" onclick="userEdit(${i})" title="Alterar">✏️</button> <button class="btn sm r" onclick="userDel(${i})" title="Excluir">✕</button></td></tr>`).join('')+'</table>'):'<div class="empty">Nenhum usuário cadastrado — o acesso usa só a senha geral do Config</div>';
+}
+function userForm(i){
+  const us=usuarios();
+  let u,p,nome,adm;
+  if(i==null){
+    u=(prompt('Usuário (login, ex.: anderson):')||'').trim().toLowerCase();
+    if(!u)return;
+    if(us.some(x=>(x.u||'').toLowerCase()===u)){toast('Usuário "'+u+'" já existe','err');return}
+  }else{u=us[i].u}
+  p=prompt('Senha (mín. 4 caracteres):'+(i==null?'':' (Enter mantém a atual)'),i==null?'':us[i].p);
+  if(p==null)return;p=p.trim();
+  if(p&&p.length<4){toast('Senha muito curta (mín. 4)','err');return}
+  if(i!=null&&!p)p=us[i].p;
+  if(!p)return;
+  nome=prompt('Nome (aparece no botão Sair):',i==null?'':(us[i].nome||''));
+  if(nome==null)return;
+  adm=confirm('Este usuário é ADMIN?\n\nOK = admin (vê o Config e gerencia usuários)\nCancelar = comum (usa o sistema, sem Config)');
+  const obj={u:u,p:p,nome:nome.trim(),adm:adm};
+  if(i==null)DB.cfg.usuarios=[...us,obj];else{const v=us.slice();v[i]=obj;DB.cfg.usuarios=v}
+  save();cfgUsersRender();aplicarAcesso();
+  toast('Usuário "'+obj.u+'" salvo','ok');
+}
+function userAdd(){userForm(null)}
+function userEdit(i){userForm(i)}
+function userDel(i){
+  const us=usuarios();
+  const s=getSessao();
+  if(s&&us[i]&&(us[i].u||'').toLowerCase()===String(s.u||'').toLowerCase()){toast('Você não pode excluir o seu próprio usuário','err');return}
+  if(!confirm('Excluir o usuário "'+us[i].u+'"?'))return;
+  DB.cfg.usuarios=us.filter((_,j)=>j!==i);
+  save();cfgUsersRender();
+  toast('Usuário excluído','ok');
 }
 </script>
 </body>
@@ -541,8 +623,57 @@ function applyTheme(t){
   document.querySelectorAll('.swatch').forEach(s=>s.classList.toggle('on',s.dataset.t===t));
 }
 function initTheme(){const t=localStorage.getItem('gestao_festas_tema');if(t&&THEMES[t])applyTheme(t)}
+/* ================= MULTIEMPRESA ================= */
+const REG='gestao_festas_empresas', CUR='gestao_festas_atual';
+let EMP=null;
+function slugify(s){return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,24)}
+function getEmpresas(){try{return JSON.parse(localStorage.getItem(REG))||[]}catch(e){return []}}
+function setEmpresas(l){localStorage.setItem(REG,JSON.stringify(l))}
+function initEmpresas(){
+  let l=getEmpresas();
+  if(!l.length){
+    // migração: dados existentes viram a 1ª empresa (nada se perde)
+    const antigo=localStorage.getItem('gestao_festas_v1');
+    let cfgAnt={};try{cfgAnt=(JSON.parse(antigo||'{}').cfg)||{}}catch(e){}
+    const id='casaencantada';
+    if(antigo&&!localStorage.getItem('gestao_festas_v1_'+id))localStorage.setItem('gestao_festas_v1_'+id,antigo);
+    l=[{id:id,nome:cfgAnt.empresa||'Casa Encantada Eventos',topico:cfgAnt.topico||'casaencantada2026'}];
+    setEmpresas(l);localStorage.setItem(CUR,id);
+  }
+  const cur=localStorage.getItem(CUR);
+  EMP=l.find(e=>e.id===cur)||l[0];
+  localStorage.setItem(CUR,EMP.id);
+}
+initEmpresas();
+function renderSelEmp(){
+  const sel=document.getElementById('selEmp');if(!sel)return;
+  const l=getEmpresas();
+  sel.innerHTML=l.map(e=>`<option value="${esc(e.id)}">${esc(e.nome)}</option>`).join('')+'<option value="__nova">＋ Nova empresa…</option>';
+  sel.value=EMP.id;
+}
+function trocarEmpresa(id){
+  if(id==='__nova'){novaEmpresa();return}
+  if(id===EMP.id)return;
+  sessionStorage.removeItem('gestao_festas_sessao');
+  localStorage.setItem(CUR,id);location.reload();
+}
+function novaEmpresa(){
+  const nome=prompt('Nome da NOVA empresa (ex.: Festas & Sonhos):');
+  if(!nome||!nome.trim())return;
+  const l=getEmpresas();
+  let id=slugify(nome)||'empresa';
+  while(l.some(e=>e.id===id))id=id+'-'+Math.floor(Math.random()*90+10);
+  const sug=slugify(nome).replace(/-/g,'')+Math.floor(Math.random()*900+100);
+  const topico=prompt('Código da nuvem DESTA empresa (dono e consultor usam o mesmo):',sug);
+  l.push({id:id,nome:nome.trim(),topico:(topico||'').trim()});
+  setEmpresas(l);
+  localStorage.setItem(CUR,id);
+  sessionStorage.removeItem('gestao_festas_sessao');
+  location.reload();
+}
+
 /* ================= ESTADO ================= */
-const LS='gestao_festas_v1';
+const LS='gestao_festas_v1_'+EMP.id;
 let DB={eventos:[],caixa:[],seq:1,cfg:{empresa:'',topico:''},lastSeen:0};
 let FREQS_PADRAO=['MENSAL','15 EM 15 DIAS','SEMANAL','ÚNICO'];
 let CONTAS_PADRAO=['CARTEIRA','PIX','CAIXA','CONTA BANCÁRIA'];
@@ -1349,7 +1480,7 @@ function zerarTudo(){
   const f2=prompt('CAMADA 2/3 — Digite o nome do sistema: CASAENCANTADA');
   if(f2!=='CASAENCANTADA'){toast('Cancelado — nada foi apagado','ok');return}
   if(!confirm('CAMADA 3/3 — ÚLTIMA confirmação.\n\nTudo será apagado (eventos, caixa).\nO backup baixado é a sua cópia de segurança.\n\nContinuar?')){toast('Cancelado — nada foi apagado','ok');return}
-  DB={eventos:[],caixa:[],seq:1,cfg:{empresa:DB.cfg.empresa,topico:DB.cfg.topico,sheet:DB.cfg.sheet,senha:DB.cfg.senha,logo:DB.cfg.logo}};
+  DB={eventos:[],caixa:[],seq:1,cfg:JSON.parse(JSON.stringify(DB.cfg))};
   save();renderAll();
   const zr=document.getElementById('zonaRisco');if(zr)zr.style.display='none';
   toast('Dados apagados. O backup baixado é a cópia de segurança.','ok');
@@ -1398,6 +1529,8 @@ function salvarCfg(){
   DB.cfg.senha=document.getElementById('cfgSenha').value.trim();
   const novoT=document.getElementById('cfgTopico').value.trim();
   if(novoT!==TOPIC){TOPIC=novoT;DB.cfg.topico=novoT;DB._lastPull=0;save();pullDB()}
+  const l=getEmpresas();const ix=l.findIndex(e=>e.id===EMP.id);
+  if(ix>=0){l[ix].nome=DB.cfg.empresa||l[ix].nome;l[ix].topico=TOPIC||l[ix].topico;setEmpresas(l);renderSelEmp()}
   else{DB.cfg.topico=novoT;save()}
   document.getElementById('tEmpresa').textContent=DB.cfg.empresa||'Casa Encantada Eventos';
   toast('Configurações salvas','ok');
@@ -1581,11 +1714,12 @@ function renderAll(){
   document.getElementById('dlTipos').innerHTML=tipos.map(t=>`<option value="${esc(t)}">`).join('');
   renderFreqs();
   cfgRender();
-  document.getElementById('tEmpresa').textContent=DB.cfg.empresa||'Casa Encantada Eventos';
+  cfgUsersRender();
+  document.getElementById('tEmpresa').textContent=DB.cfg.empresa||EMP.nome;
 }
 window.addEventListener('DOMContentLoaded',()=>{
   load();
-  TOPIC=DB.cfg.topico||'casaencantada2026';
+  TOPIC=DB.cfg.topico||EMP.topico||'';
   DB.cfg.topico=TOPIC;
   document.getElementById('cfgEmpresa').value=DB.cfg.empresa||'';
   document.getElementById('cfgTopico').value=TOPIC;
@@ -1602,11 +1736,15 @@ window.addEventListener('DOMContentLoaded',()=>{
   if(DB.cfg.categorias&&DB.cfg.categorias.length){CATEGORIAS.length=0;CATEGORIAS.push(...DB.cfg.categorias)}
   renderContas();
   cfgRender();
+  cfgUsersRender();
+  renderSelEmp();
+  document.getElementById('selEmp').value=EMP.id;
+  aplicarAcesso();
   ['eVal','cVal'].forEach(id=>{const el=document.getElementById(id);if(el){el.addEventListener('input',()=>maskMoeda(el));el.setAttribute('type','text');el.setAttribute('inputmode','numeric');el.setAttribute('placeholder','0,00');el.style.textAlign='right'}});
   document.querySelectorAll('.modal-bg').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('on')});
   aplicaLogo();
   document.getElementById('loginLogoImg').src=DB.cfg.logo||document.querySelector('#logoImg').src;
-  if(DB.cfg.senha){document.getElementById('mLogin').classList.add('on');setTimeout(()=>document.getElementById('loginPass').focus(),200)}
+  if(precisaLogin()&&!getSessao())abreLogin();
   initTheme();
   if(TOPIC){pullDB();setInterval(pullDB,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){pullDB();pubDB()}})}
   // NUVEM-FIRST: se tem planilha Google, ela e a fonte da verdade
