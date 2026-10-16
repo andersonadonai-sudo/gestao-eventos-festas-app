@@ -359,7 +359,14 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
         <input type="file" id="impJson" accept=".json" onchange="restJson(this)">
         <button class="btn" onclick="limparExemplos()">🧹 Remover exemplos</button>
         <button class="btn" onclick="seed();renderAll();toast('Dados de exemplo carregados (José e Maria)','ok')">📋 Carregar dados de exemplo</button>
-        <button class="btn r" onclick="zerarTudo()">🗑️ Zerar tudo</button>
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px dashed rgba(255,93,108,.4)">
+        <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:8px">⚠️ ZONA DE RISCO — não mexer no dia a dia</div>
+        <button class="btn sm" style="background:transparent;border:1px dashed rgba(255,93,108,.5);color:var(--red);font-weight:400" onclick="document.getElementById('zonaRisco').style.display=document.getElementById('zonaRisco').style.display==='none'?'block':'none'">🗑️ Zerar tudo (apagão geral) — oculto</button>
+        <div id="zonaRisco" style="display:none;margin-top:10px">
+          <div style="font-size:13px;color:var(--mut);line-height:1.5;margin-bottom:10px">Isto apaga <b>TODOS</b> os eventos e lançamentos deste sistema. Antes de continuar, um <b>backup será baixado automaticamente</b> no seu aparelho.</div>
+          <button class="btn r" onclick="zerarTudo()">Continuar com o apagão →</button>
+        </div>
       </div>
     </div>
   </section>
@@ -1190,10 +1197,17 @@ function limparExemplos(){
   save();renderAll();toast('Dados de exemplo removidos','ok');
 }
 function zerarTudo(){
-  if(!confirm('APAGAR TUDO? Eventos, caixa e configurações.\nFaça um backup antes!'))return;
-  if(!confirm('Tem certeza mesmo? Esta ação não pode ser desfeita.'))return;
-  DB={eventos:[],caixa:[],seq:1,cfg:{empresa:DB.cfg.empresa,topico:DB.cfg.topico}};
-  save();renderAll();toast('Dados apagados','ok');
+  // CAMADA 0: backup forçado (baixa sozinho, sem pedir)
+  try{bkpJson()}catch(e){}
+  const f1=prompt('CAMADA 1/3 — O backup foi baixado no seu aparelho agora.\n\nPara continuar, digite: APAGAR');
+  if(f1!=='APAGAR'){toast('Cancelado — nada foi apagado','ok');return}
+  const f2=prompt('CAMADA 2/3 — Digite o nome do sistema: CASAENCANTADA');
+  if(f2!=='CASAENCANTADA'){toast('Cancelado — nada foi apagado','ok');return}
+  if(!confirm('CAMADA 3/3 — ÚLTIMA confirmação.\n\nTudo será apagado (eventos, caixa).\nO backup baixado é a sua cópia de segurança.\n\nContinuar?')){toast('Cancelado — nada foi apagado','ok');return}
+  DB={eventos:[],caixa:[],seq:1,cfg:{empresa:DB.cfg.empresa,topico:DB.cfg.topico,sheet:DB.cfg.sheet,senha:DB.cfg.senha,logo:DB.cfg.logo}};
+  save();renderAll();
+  const zr=document.getElementById('zonaRisco');if(zr)zr.style.display='none';
+  toast('Dados apagados. O backup baixado é a cópia de segurança.','ok');
 }
 
 /* ================= NUVEM (ntfy) ================= */
