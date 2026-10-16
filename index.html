@@ -349,6 +349,14 @@ th.stik,th.stikL{z-index:3}
       <div style="font-size:14px;color:var(--mut);margin-bottom:10px">Admin vê o Config e gerencia usuários. Usuário comum usa o sistema sem acesso ao Config. Cada empresa tem seus próprios usuários.</div>
       <div id="cfgUsers"></div>
       <button class="btn sm p" onclick="userAdd()">＋ Incluir usuário</button>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+        <label>📤 Entregar acesso a esta empresa (p/ o dono ou consultor)</label>
+        <div style="font-size:14px;color:var(--mut);margin:6px 0 8px;line-height:1.5">Gera a mensagem pronta — link de convite + login + senha — pra colar no WhatsApp da pessoa. Ela abre o link, escolhe o nome dela no menu e digita a senha.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div style="max-width:220px"><label>Usuário</label><select id="convUser" style="width:100%"></select></div>
+          <button class="btn g" onclick="copiarAcesso()">📋 Copiar mensagem de acesso</button>
+        </div>
+      </div>
     </div>
     <div class="card acc">
       <h3>🗂️ Cadastros — incluir, alterar ou excluir</h3>
@@ -618,6 +626,8 @@ function aplicarAcesso(){
 function cfgUsersRender(){
   const el=document.getElementById('cfgUsers');if(!el)return;
   const us=usuarios();
+  const cs=document.getElementById('convUser');
+  if(cs)cs.innerHTML=us.length?us.map(x=>`<option value="${esc(x.u)}">${esc(x.nome||x.u)} (${esc(x.u)})</option>`).join(''):'<option value="">— cadastre um usuário primeiro —</option>';
   el.innerHTML=us.length?('<table style="margin:0">'+us.map((x,i)=>`<tr><td><b>${esc(x.u)}</b></td><td>${esc(x.nome||'')}</td><td>${x.adm?'<span class="badge b-grn">admin</span>':'<span class="badge b-mut">comum</span>'}</td><td style="width:76px;text-align:right;white-space:nowrap"><button class="btn sm" onclick="userEdit(${i})" title="Alterar">✏️</button> <button class="btn sm r" onclick="userDel(${i})" title="Excluir">✕</button></td></tr>`).join('')+'</table>'):'<div class="empty">Nenhum usuário cadastrado — o acesso usa só a senha geral do Config</div>';
 }
 function userForm(i){
@@ -651,6 +661,23 @@ function userDel(i){
   DB.cfg.usuarios=us.filter((_,j)=>j!==i);
   save();cfgUsersRender();
   toast('Usuário excluído','ok');
+}
+function copiarAcesso(){
+  const us=usuarios();
+  if(!us.length){toast('Cadastre um usuário primeiro','err');return}
+  const u=us.find(x=>x.u===document.getElementById('convUser').value)||us[0];
+  const dados={id:EMP.id,nome:DB.cfg.empresa||EMP.nome,topico:TOPIC||DB.cfg.topico||''};
+  if(!dados.topico){toast('Esta empresa não tem código da nuvem — configure primeiro','err');return}
+  const b=btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(dados))));
+  const url='https://casaencantada.app.br/#convite='+b;
+  const msg='🎯 ACESSO AO SISTEMA — '+dados.nome+'\n\n'+
+    '1) Abra este link (de preferência no Chrome e depois "Adicionar à tela inicial"):\n'+url+'\n\n'+
+    '2) No login, escolha seu nome no menu:\n'+(u.nome||u.u)+'\n\n'+
+    '3) Digite a senha: '+u.p+'\n\n'+
+    'Pronto! Os dados sincronizam automaticamente entre os aparelhos.';
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(msg).then(()=>toast('Mensagem copiada! Cole no WhatsApp da pessoa','ok')).catch(()=>prompt('Copie a mensagem:',msg));
+  }else prompt('Copie a mensagem:',msg);
 }
 </script>
 </body>
