@@ -418,6 +418,18 @@ label{font-size:12px;color:var(--mut);display:block;margin-bottom:5px;text-trans
   </div>
 </div>
 
+<!-- modal excluir evento -->
+<div class="modal-bg" id="mDelEv">
+  <div class="modal" style="max-width:460px">
+    <h3 style="color:var(--red)">Excluir evento</h3>
+    <div id="delEvBody" style="font-size:15px;line-height:1.6"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="fecha('mDelEv')">Cancelar</button>
+      <button class="btn r" id="delEvBtn">Excluir mesmo assim</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- modal login -->
@@ -805,14 +817,38 @@ function salvarEvento(){
   save();fecha('mEv');renderAll();
   toast('Evento salvo — Registro '+obj.reg,'ok');
 }
+let delEvAlvo=null;
 function delEvento(id){
   const e=DB.eventos.find(x=>x.id===id);
-  const n=DB.caixa.filter(c=>c.evId===id).length;
-  if(!confirm(`Excluir o evento de ${e.cli}?\n${n?n+' lançamento(s) do caixa continuarão no histórico (desvinculados).':''}`))return;
-  DB.eventos=DB.eventos.filter(x=>x.id!==id);
-  DB.caixa.forEach(c=>{if(c.evId===id)delete c.evId});
-  save();renderAll();toast('Evento excluído','ok');
+  if(!e)return;
+  const pgs=DB.caixa.filter(c=>c.evId===id&&c.dc==='C');
+  const total=pgs.reduce((a,c)=>a+(+c.val||0),0);
+  delEvAlvo=id;
+  const body=document.getElementById('delEvBody');
+  if(pgs.length){
+    // TEM lançamentos vinculados: bloqueia e explica o efeito no saldo (lógica Minhas Economias)
+    body.innerHTML=`
+      <div style="background:rgba(255,93,108,.1);border:1px solid rgba(255,93,108,.35);border-radius:12px;padding:12px 14px;margin-bottom:12px">
+        <b>${esc(e.cli)}</b> (registro ${esc(e.reg)}) tem <b>${pgs.length} recebimento(s) no caixa</b> somando <b>${money(total)}</b>.
+      </div>
+      <div style="margin-bottom:10px">⚠️ Se excluir agora, <b>os saldos de todos os dias que tiveram recebimento desse evento serão alterados</b> (os valores saem do histórico do caixa junto).</div>
+      <div style="margin-bottom:10px">🔒 Por segurança, <b>não é possível excluir direto</b>. Você tem 2 opções:</div>
+      <div style="background:var(--card2);border-radius:10px;padding:10px 12px;margin-bottom:8px"><b>1) Excluir movimento a movimento</b> — vá no Caixa e apague cada recebimento desse evento (igual ao Minhas Economias). Depois de zerar os vínculos, a exclusão do evento é liberada.</div>
+      <div style="background:var(--card2);border-radius:10px;padding:10px 12px"><b>2) Manter o evento</b> — se ele foi cadastrado por engano mas o dinheiro entrou de verdade, edite o evento (✏️) em vez de excluir.</div>`;
+    document.getElementById('delEvBtn').style.display='none';
+  }else{
+    // sem vínculos: pode excluir, com confirmação clara
+    body.innerHTML=`Excluir o evento de <b>${esc(e.cli)}</b> (registro ${esc(e.reg)})?<br><br>Nenhum lançamento do caixa está vinculado a ele — <b>o caixa não será afetado</b>.`;
+    document.getElementById('delEvBtn').style.display='';
+  }
+  document.getElementById('mDelEv').classList.add('on');
 }
+function confirmarDelEvento(){
+  if(!delEvAlvo)return;
+  DB.eventos=DB.eventos.filter(x=>x.id!==delEvAlvo);
+  save();renderAll();fecha('mDelEv');toast('Evento excluído — caixa intacto','ok');
+}
+document.getElementById('delEvBtn').onclick=confirmarDelEvento;
 function tblEventos(){
   const el=document.getElementById('tblEventos');
   if(!DB.eventos.length){el.innerHTML='<tr><td><div class="empty">Nenhum evento. Clique em "Novo evento" — o Nº de registro é gerado automaticamente (EV-0001, EV-0002...)</div></td></tr>';return}
