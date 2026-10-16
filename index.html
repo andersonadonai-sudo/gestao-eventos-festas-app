@@ -376,6 +376,7 @@ th.stik,th.stikL{z-index:3}
       <div class="frow">
         <div><label>Nome da empresa</label><input id="cfgEmpresa" placeholder="Nome do cliente / empresa de festas"></div>
         <div style="max-width:220px"><label>Código da nuvem (sync) ★ principal</label><input id="cfgTopico" placeholder="casaencantada2026"></div>
+        <div style="max-width:220px"><label>Código da REDE (seus aparelhos)</label><input id="cfgRede" placeholder="ex.: anderson-rede-2026"></div>
         <div style="max-width:180px"><label>Senha de acesso</label><input id="cfgSenha" inputmode="numeric" maxlength="8" placeholder="ex.: 1234"></div>
       </div>
       <button class="btn p" onclick="salvarCfg()">Salvar</button>
@@ -743,6 +744,7 @@ function novaEmpresa(){
   setEmpresas(l);
   localStorage.setItem(CUR,id);
   sessionStorage.removeItem('gestao_festas_sessao');
+  anunciarRede(l[l.length-1]); // espelha nos outros aparelhos da rede
   location.reload();
 }
 
@@ -1786,6 +1788,15 @@ function salvarCfg(){
   if(novoT!==TOPIC){TOPIC=novoT;DB.cfg.topico=novoT;DB._lastPull=0;save();pullDB()}
   const l=getEmpresas();const ix=l.findIndex(e=>e.id===EMP.id);
   if(ix>=0){l[ix].nome=DB.cfg.empresa||l[ix].nome;l[ix].topico=TOPIC||l[ix].topico;setEmpresas(l);renderSelEmp()}
+  const novaRede=document.getElementById('cfgRede').value.trim();
+  if(novaRede!==REDE){REDE=novaRede;DB.cfg.rede=REDE;localStorage.setItem('gestao_festas_rede_last',0);save();
+    if(REDE){ // ao configurar: espelha TODAS as empresas locais no canal da rede + puxa as que já foram anunciadas
+      getEmpresas().forEach(e=>anunciarRede(e));
+      setTimeout(()=>pullRede(true),1500);
+      setInterval(pullRede,30000);
+      toast('Rede ativada — suas empresas vão se espelhar entre os seus aparelhos','ok');
+    }
+  }
   else{DB.cfg.topico=novoT;save()}
   document.getElementById('tEmpresa').textContent=DB.cfg.empresa||'Casa Encantada Eventos';
   toast('Configurações salvas','ok');
@@ -1868,6 +1879,39 @@ function colarConvite(){
   }catch(e){toast('Convite inválido','err')}
 }
 
+/* ================= REDE DO GESTOR (espelha lista de empresas entre os aparelhos do dono) ================= */
+let REDE='';
+function anunciarRede(emp){
+  if(!REDE||!emp||!emp.id)return;
+  try{
+    fetch('https://ntfy.sh/'+REDE,{method:'POST',body:JSON.stringify({t:Date.now(),emp:{id:emp.id,nome:emp.nome,topico:emp.topico||''}})});
+  }catch(e){}
+}
+function pullRede(forcar){
+  if(!REDE)return;
+  const last=+(localStorage.getItem('gestao_festas_rede_last')||0);
+  const since=forcar?'all':(last?(Math.floor(last/1000)-1):'all');
+  fetch('https://ntfy.sh/'+REDE+'/json?poll=1&since='+since)
+    .then(r=>r.text())
+    .then(raw=>{
+      String(raw).split('\n').forEach(l=>{
+        l=l.trim();if(!l)return;
+        let o=null;try{o=JSON.parse(l)}catch(e){return}
+        if(!o||!o.message)return;
+        let d=null;try{d=JSON.parse(o.message)}catch(e){return}
+        if(!d||!d.emp||!d.emp.id)return;
+        const lista=getEmpresas();
+        if(!lista.some(e=>e.id===d.emp.id)){
+          lista.push({id:d.emp.id,nome:d.emp.nome||d.emp.id,topico:d.emp.topico||''});
+          setEmpresas(lista);
+          if(EMP&&EMP.id){renderSelEmp();toast('Nova empresa na rede: "'+(d.emp.nome||d.emp.id)+'"','ok')}
+        }
+        const t=+d.t||0;
+        if(t>last)localStorage.setItem('gestao_festas_rede_last',t);
+      });
+    }).catch(()=>{});
+}
+
 /* ================= RENOMEAR EMPRESA ================= */
 function renomearEmpresa(){
   const atual=DB.cfg.empresa||EMP.nome;
@@ -1879,6 +1923,7 @@ function renomearEmpresa(){
   save();renderSelEmp();
   document.getElementById('tEmpresa').textContent=n.trim();
   const cf=document.getElementById('cfgEmpresa');if(cf)cf.value=n.trim();
+  anunciarRede({id:EMP.id,nome:n.trim(),topico:TOPIC||DB.cfg.topico||''});
   toast('Renomeada para "'+n.trim()+'" — sincroniza nos outros aparelhos','ok');
 }
 
@@ -2024,8 +2069,10 @@ window.addEventListener('DOMContentLoaded',()=>{
   load();
   TOPIC=DB.cfg.topico||EMP.topico||'';
   DB.cfg.topico=TOPIC;
+  REDE=DB.cfg.rede||'';
   document.getElementById('cfgEmpresa').value=DB.cfg.empresa||'';
   document.getElementById('cfgTopico').value=TOPIC;
+  document.getElementById('cfgRede').value=REDE;
   SHEET=DB.cfg.sheet||'';
   document.getElementById('cfgSheet').value=SHEET;
   document.getElementById('cfgSenha').value=DB.cfg.senha||'';
@@ -2056,6 +2103,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     navigator.serviceWorker.register('/sw.js').catch(()=>{});
   }
   if(TOPIC){pullDB();setInterval(pullDB,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){pullDB();pubDB()}})}
+  if(REDE){pullRede();setInterval(pullRede,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pullRede()})}
   // NUVEM-FIRST: se tem planilha Google, ela e a fonte da verdade
   if(SHEET){cloudFirst(); setInterval(cloudFirst,30000)}
 });
