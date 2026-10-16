@@ -362,6 +362,8 @@ th.stik,th.stikL{z-index:3}
           <label>🔗 Convidar alguém para ESTA empresa</label>
           <div style="font-size:14px;color:var(--mut);margin:6px 0 10px;line-height:1.5">Gera um link que abre o sistema já nesta empresa (dados zerados ou sincronizados pela nuvem) e pede o login que você cadastrou em <b>Usuários</b>. Quem recebe não precisa configurar nada.</div>
           <button class="btn g" onclick="gerarConvite()">🔗 Copiar link de convite desta empresa</button>
+          <button class="btn" onclick="toast('Puxando da nuvem...','ok');pullDB(true)" style="margin-top:8px">⬇️ Puxar a base mais recente da nuvem agora</button>
+          <div style="font-size:14px;color:var(--mut);margin-top:6px;line-height:1.5">Se um aparelho estiver mostrando dados antigos, abra-o e clique neste botão — ele busca no código da nuvem a base mais recente e aplica.</div>
         </div>
     </div>
     <div class="card acc">
@@ -1513,48 +1515,97 @@ function zerarTudo(){
 
 /* ================= NUVEM (ntfy) ================= */
 let TOPIC='';
+async function pubMsg(txt){
+  const r=await fetch('https://ntfy.sh/'+TOPIC,{method:'POST',body:txt});
+  return r.ok;
+}
 function pubDB(){
   if(!TOPIC)return;
   clearTimeout(window._pubT);
-  window._pubT=setTimeout(()=>{
+  window._pubT=setTimeout(async()=>{
     try{
-      fetch('https://ntfy.sh/'+TOPIC,{method:'POST',body:JSON.stringify({t:Date.now(),db:DB})}).then(r=>{if(r.ok){document.getElementById('cloudDot').classList.add('on')}});
+      // payload ENXUTO: só o essencial (bkps/_lastPull/logo estouram o limite de 4KB do ntfy)
+      const payload={eventos:DB.eventos||[],caixa:DB.caixa||[],seq:DB.seq||1,cfg:{...(DB.cfg||{})}};
+      if(payload.cfg)delete payload.cfg.logo;
+      const t=Date.now();
+      const env=JSON.stringify({t:t,db:payload});
+      if(env.length<3600){
+        await pubMsg(env); // cabe em 1 mensagem (formato antigo, compatível)
+      }else if(window.CompressionStream){
+        const cs=new CompressionStream('gzip');
+        const stream=new Blob([env]).stream().pipeThrough(cs);
+        const buf=new Uint8Array(await new Response(stream).arrayBuffer());
+        let bin='';for(const b of buf)bin+=String.fromCharCode(b);
+        const gz=btoa(bin);
+        const CH=2800;const n=Math.ceil(gz.length/CH);
+        for(let i=0;i<n;i++){
+          await pubMsg(JSON.stringify({t:t,i:i,n:n,c:gz.substr(i*CH,CH)}));
+          await new Promise(r=>setTimeout(r,250));
+        }
+      }
+      document.getElementById('cloudDot').classList.add('on');
     }catch(e){}
   },2500);
 }
-function pullDB(){
+function pullDB(forcar){
   if(!TOPIC)return;
   const last=+DB._lastPull||0;
-  const since=last?Math.floor(last/1000):'all'; // 1a vez: pega tudo que existir no topico
+  const since=forcar?'all':(last?(Math.floor(last/1000)-1):'all');
   fetch('https://ntfy.sh/'+TOPIC+'/json?poll=1&since='+since)
     .then(r=>r.json())
     .then(j=>{
+      const sets={};
       (j.messages||[]).forEach(m=>{
         try{
           const d=JSON.parse(m.message);
-          if(d.db&&d.t>DB._lastPull){
-            DB._lastPull=d.t;
-            DB.eventos=d.db.eventos||[];DB.caixa=d.db.caixa||[];
-            let topicoMudou=false;
-            if(d.db.cfg&&typeof d.db.cfg==='object'){
-              DB.cfg={...DB.cfg,...d.db.cfg};
-              if((DB.cfg.topico||'')!==TOPIC)topicoMudou=true;
-            }
-            localStorage.setItem(LS,JSON.stringify(DB));
-            const le=getEmpresas(),ie=le.findIndex(e=>e.id===EMP.id);
-            if(ie>=0&&DB.cfg.empresa&&le[ie].nome!==DB.cfg.empresa){le[ie].nome=DB.cfg.empresa;setEmpresas(le);renderSelEmp()}
-            renderAll();
-            aplicaLogo();
-            const lli=document.getElementById('loginLogoImg');if(lli)lli.src=DB.cfg.logo||document.getElementById('logoImg').src;
-            if(topicoMudou){TOPIC=DB.cfg.topico;location.reload();return}
-            aplicarAcesso();
-            if(precisaLogin()&&!getSessao())abreLogin();
-          }
+          if(d.db){const t=+d.t||0;if(!sets[t])sets[t]={single:d.db,n:1,got:1}}
+          else if(d.c&&d.n){const t=+d.t||0;const s=sets[t]||(sets[t]={parts:{},n:d.n,got:0});if(!s.parts[d.i]){s.parts[d.i]=d.c;s.got++}}
         }catch(e){}
       });
+      const ts=Object.keys(sets).map(Number).sort((a,b)=>b-a);
+      for(const t of ts){
+        const s=sets[t];
+        if((s.single||s.got>=s.n)&&t>last){aplicarNuvem(t,s);return}
+      }
       document.getElementById('cloudDot').classList.add('on');
     })
     .catch(()=>{document.getElementById('cloudDot').classList.remove('on')});
+}
+async function aplicarNuvem(t,s){
+  try{
+    let db;
+    if(s.single)db=s.single;
+    else{
+      const b64=Object.keys(s.parts).sort((a,b)=>a-b).map(k=>s.parts[k]).join('');
+      const bin=atob(b64);
+      const bytes=Uint8Array.from(bin,c=>c.charCodeAt(0));
+      let txt;
+      if(window.DecompressionStream){
+        const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+        txt=await new Response(stream).text();
+      }else txt=new TextDecoder().decode(bytes);
+      db=JSON.parse(txt).db;
+    }
+    if(!db)return;
+    DB._lastPull=t;
+    DB.eventos=db.eventos||[];DB.caixa=db.caixa||[];
+    let topicoMudou=false;
+    if(db.cfg&&typeof db.cfg==='object'){
+      DB.cfg={...DB.cfg,...db.cfg};
+      if((DB.cfg.topico||'')!==TOPIC)topicoMudou=true;
+    }
+    localStorage.setItem(LS,JSON.stringify(DB));
+    const le=getEmpresas(),ie=le.findIndex(e=>e.id===EMP.id);
+    if(ie>=0&&DB.cfg.empresa&&le[ie].nome!==DB.cfg.empresa){le[ie].nome=DB.cfg.empresa;setEmpresas(le);renderSelEmp()}
+    renderAll();
+    aplicaLogo();
+    const lli=document.getElementById('loginLogoImg');if(lli)lli.src=DB.cfg.logo||document.getElementById('logoImg').src;
+    if(topicoMudou){TOPIC=DB.cfg.topico;location.reload();return}
+    aplicarAcesso();
+    if(precisaLogin()&&!getSessao())abreLogin();
+    document.getElementById('cloudDot').classList.add('on');
+    toast('Nuvem sincronizada — base mais recente aplicada','ok');
+  }catch(e){}
 }
 
 /* ================= CONFIG ================= */
