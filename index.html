@@ -1687,15 +1687,20 @@ function pullDB(forcar){
   const last=+DB._lastPull||0;
   const since=forcar?'all':(last?(Math.floor(last/1000)-1):'all');
   fetch('https://ntfy.sh/'+TOPIC+'/json?poll=1&since='+since)
-    .then(r=>r.json())
-    .then(j=>{
+    .then(r=>r.text())
+    .then(raw=>{
       const sets={};
-      (j.messages||[]).forEach(m=>{
+      const processar=(msgStr)=>{
         try{
-          const d=JSON.parse(m.message);
+          const d=JSON.parse(msgStr);
           if(d.db){const t=+d.t||0;if(!sets[t])sets[t]={single:d.db,n:1,got:1}}
           else if(d.c&&d.n){const t=+d.t||0;const s=sets[t]||(sets[t]={parts:{},n:d.n,got:0});if(!s.parts[d.i]){s.parts[d.i]=d.c;s.got++}}
         }catch(e){}
+      };
+      // /json pode devolver objetos concatenados/quebrados: parse tolerante linha a linha
+      String(raw).split('\n').forEach(l=>{
+        l=l.trim();if(!l)return;
+        try{const o=JSON.parse(l);if(o&&o.message)processar(o.message)}catch(e){}
       });
       const ts=Object.keys(sets).map(Number).sort((a,b)=>b-a);
       for(const t of ts){
