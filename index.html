@@ -133,10 +133,17 @@ th.stik,th.stikL{z-index:3}
 @media print{
   body{background:#fff;color:#000}
   .topbar,nav,.btn,.no-print{display:none!important}
-  .card{border:1px solid #ccc;background:#fff;break-inside:avoid}
+  .card{border:1px solid #ccc;background:#fff;break-inside:avoid;box-shadow:none}
   .screen{display:block!important}
   .screen .card:not(.print-ok){display:none}
+  .screen .card.print-ok.off{display:none!important}
   th,td{color:#000;border-color:#ddd}
+  table{font-size:11px}
+  .tbl-wrap{overflow:visible!important}
+  @page{size:A4 portrait;margin:10mm}
+}
+@media print and (orientation:landscape){
+  @page{size:A4 landscape;margin:8mm}
 }
 </style>
 </head>
@@ -264,28 +271,52 @@ th.stik,th.stikL{z-index:3}
 
   <!-- ============ RELATÓRIOS ============ -->
   <section class="screen" id="s-rel">
-    <h2>📈 Relatórios <button class="btn" onclick="window.print()">🖨️ Imprimir / PDF</button></h2>
-    <div class="card print-ok">
+    <h2>📈 Relatórios</h2>
+    <div class="card no-print" style="background:var(--card2)">
+      <h3>🖨️ O que imprimir / exportar</h3>
+      <div style="font-size:14px;color:var(--mut);margin-bottom:10px">Marque os relatórios que quer imprimir (PDF) ou exportar (Excel). Nenhum marcado = todos.</div>
+      <div id="relChecks" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px"></div>
+      <div class="frow">
+        <div style="max-width:170px"><label>Orientação</label><select id="relOrient"><option value="retrato">Retrato</option><option value="paisagem">Paisagem</option></select></div>
+        <div style="max-width:170px"><label>Período do caixa</label>
+          <select id="relPeriodo" onchange="document.getElementById('relDatas').style.display=this.value==='periodo'?'flex':'none'">
+            <option value="mes">Mês atual</option><option value="ano">Ano atual</option><option value="tudo">Tudo</option><option value="periodo">Período específico…</option>
+          </select></div>
+        <div id="relDatas" style="display:none;gap:8px;align-items:flex-end">
+          <div><label>De</label><input type="date" id="relDe"></div>
+          <div><label>Até</label><input type="date" id="relAte"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn p" onclick="imprimirRel()">🖨️ Imprimir / PDF</button>
+        <button class="btn g" onclick="excelRel()">⬇️ Excel (.xlsx)</button>
+      </div>
+    </div>
+    <div class="card print-ok" id="card-r7">
+      <h3>Relatório de caixa <small id="r7Periodo" style="color:var(--mut)"></small></h3>
+      <div class="tbl-wrap"><table id="r7"></table></div>
+    </div>
+    <div class="card print-ok" id="card-r1">
       <h3>Recebimentos por mês × modalidade</h3>
       <div class="tbl-wrap"><table id="r1"></table></div>
     </div>
-    <div class="card print-ok">
+    <div class="card print-ok" id="card-r2">
       <h3>Recebimentos por mês × tipo de evento</h3>
       <div class="tbl-wrap"><table id="r2"></table></div>
     </div>
-    <div class="card print-ok">
+    <div class="card print-ok" id="card-r3">
       <h3>Previsão de recebimentos (a receber mês a mês) <small>gerada pela frequência de cada contrato</small></h3>
       <div class="tbl-wrap"><table id="r3"></table></div>
     </div>
-    <div class="card print-ok">
+    <div class="card print-ok" id="card-r4">
       <h3>Eventos a realizar — dia a dia (próximos 120 dias)</h3>
       <div class="tbl-wrap"><table id="r4"></table></div>
     </div>
-    <div class="card print-ok">
+    <div class="card print-ok" id="card-r6">
       <h3>Resumo por tipo de evento — contratado × recebido × falta</h3>
       <div class="tbl-wrap"><table id="r6"></table></div>
     </div>
-    <div class="card print-ok">
+    <div class="card print-ok" id="card-r5">
       <h3>Situação por evento — quanto falta receber</h3>
       <div class="tbl-wrap"><table id="r5"></table></div>
     </div>
@@ -1273,6 +1304,60 @@ function tblCaixa(){
 }
 </script>
 <script>
+/* ================= IMPRESSÃO / EXPORT DE RELATÓRIOS ================= */
+const REL_LISTA=[
+  {id:'r7',nome:'Relatório de caixa'},
+  {id:'r1',nome:'Mês × modalidade'},
+  {id:'r2',nome:'Mês × tipo de evento'},
+  {id:'r3',nome:'Previsão de recebimentos'},
+  {id:'r4',nome:'Eventos 120 dias'},
+  {id:'r6',nome:'Resumo por tipo'},
+  {id:'r5',nome:'Situação por evento'}
+];
+function relChecksRender(){
+  const el=document.getElementById('relChecks');if(!el)return;
+  el.innerHTML=REL_LISTA.map(r=>`<label style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;cursor:pointer"><input type="checkbox" id="ck-${r.id}" checked> ${r.nome}</label>`).join('');
+}
+function relSelecionados(){
+  const sel=REL_LISTA.filter(r=>{const ck=document.getElementById('ck-'+r.id);return !ck||ck.checked});
+  return sel.length?sel:REL_LISTA; // nada marcado = todos
+}
+function imprimirRel(){
+  const sel=relSelecionados();
+  REL_LISTA.forEach(r=>{
+    const card=document.getElementById('card-'+r.id);
+    if(card)card.classList.toggle('off',!sel.some(s=>s.id===r.id));
+  });
+  const o=document.getElementById('relOrient').value;
+  const st=document.createElement('style');st.id='pgOrient';
+  st.textContent='@media print{@page{size:A4 '+(o==='paisagem'?'landscape':'portrait')+'!important;margin:'+(o==='paisagem'?'8mm':'10mm')+'}}';
+  const ant=document.getElementById('pgOrient');if(ant)ant.remove();
+  document.head.appendChild(st);
+  setTimeout(()=>window.print(),80);
+}
+function excelRel(){
+  const sel=relSelecionados();
+  const wbs=[];
+  sel.forEach(r=>{
+    const tb=document.getElementById(r.id);
+    if(!tb)return;
+    const rows=[...tb.querySelectorAll('tr')].map(tr=>[...tr.querySelectorAll('th,td')].map(td=>{
+      let t=td.innerText.trim();
+      const num=t.replace(/[R$\s.]/g,'').replace(',','.');
+      return (/^-?\d+(\.\d+)?$/.test(num)&&t.includes('R$'))?parseFloat(num):t;
+    }));
+    if(rows.length)wbs.push({nome:r.nome,rows:rows});
+  });
+  if(!wbs.length){toast('Nada para exportar','err');return}
+  const wb=XLSX.utils.book_new();
+  wbs.forEach(w=>{
+    const ws=XLSX.utils.aoa_to_sheet(w.rows);
+    XLSX.utils.book_append_sheet(wb,ws,w.nome.slice(0,31));
+  });
+  XLSX.writeFile(wb,'relatorios-'+today()+'.xlsx');
+  toast('Excel gerado — '+wbs.length+' aba(s)','ok');
+}
+
 /* ================= AGENDA ================= */
 let agY,agM;
 function agInit(){const d=new Date();agY=d.getFullYear();agM=d.getMonth()}
@@ -1305,6 +1390,33 @@ function renderAgenda(){
 }
 
 /* ================= RELATÓRIOS ================= */
+function periodoCaixa(){
+  const m=document.getElementById('relPeriodo').value;
+  const cx=DB.caixa.map(c=>c.data||'').sort();
+  if(m==='mes'){const h=today().slice(0,7);return [h+'-01',h+'-31']}
+  if(m==='ano'){const a=today().slice(0,4);return [a+'-01-01',a+'-12-31']}
+  if(m==='periodo'){const de=document.getElementById('relDe').value||'0000-01-01';const ate=document.getElementById('relAte').value||'9999-12-31';return [de,ate]}
+  return ['0000-01-01','9999-12-31'];
+}
+function relCaixa(){
+  const [de,ate]=periodoCaixa();
+  const cx=DB.caixa.filter(c=>(c.data||'')>=de&&(c.data||'')<=ate).slice().sort((a,b)=>(a.data||'').localeCompare(b.data||'')||((a._ts||0)-(b._ts||0)));
+  document.getElementById('r7Periodo').textContent=de.slice(0,4)==='0000'?'(tudo)':('de '+fmtD(de)+' até '+fmtD(ate));
+  let s=0;
+  let h='<tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo de evento</th><th>Registro</th><th>D/C</th><th>Conta</th><th class="num">Valor</th><th class="num">Saldo</th></tr>';
+  if(!cx.length)h='<tr><td><div class="empty">Sem lançamentos no período</div></td></tr>';
+  cx.forEach(c=>{
+    s+=c.dc==='D'?-(+c.val||0):(+c.val||0);
+    h+=`<tr><td>${fmtD(c.data)}</td><td>${esc(c.desc)}</td><td>${esc(c.cat)}</td><td>${esc(c.tipo||'—')}</td><td>${esc(c.reg||'—')}</td><td>${c.dc}</td><td>${esc((c.forma||c.conta||'—').toUpperCase())}</td><td class="num">${money(c.val)}</td><td class="num"><b>${money(s)}</b></td></tr>`;
+  });
+  if(cx.length){
+    const totC=cx.filter(c=>c.dc==='C').reduce((a,c)=>a+(+c.val||0),0);
+    const totD=cx.filter(c=>c.dc==='D').reduce((a,c)=>a+(+c.val||0),0);
+    h+=`<tr class="tot"><td colspan="7">TOTAL — créditos ${money(totC)} · débitos ${money(totD)}</td><td class="num">${money(totC-totD)}</td><td class="num">${money(s)}</td></tr>`;
+  }
+  document.getElementById('r7').innerHTML=h;
+}
+
 function relatorios(){
   const meses=monthsRange();
   // r1: mês × modalidade
@@ -1838,7 +1950,7 @@ function renderAll(){
   calcEventos();
   kpis();chartMeses();donutForma();proxEventos();tblTipos();alertas();
   tblEventos();tblCaixa();
-  renderAgenda();relatorios();renderBkps();
+  renderAgenda();relatorios();relCaixa();renderBkps();
   // datalists
   document.getElementById('dlReg').innerHTML=DB.eventos.map(e=>`<option value="${esc(e.reg)}">${esc(e.cli)} — ${fmtD(e.festa)} — falta ${money(e.falta)}</option>`).join('');
   const tipos=[...new Set(DB.eventos.map(e=>e.tipo).filter(Boolean))];
@@ -1872,6 +1984,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   renderContas();
   cfgRender();
   cfgUsersRender();
+  relChecksRender();
   renderSelEmp();
   document.getElementById('selEmp').value=EMP.id;
   aplicarAcesso();
