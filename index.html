@@ -155,6 +155,7 @@ th.stik,th.stikL{z-index:3}
     <div class="sub">Caixa + Contratos + Recebimentos — integrado</div>
   </div>
   <div class="top-right">
+    <button class="btn sm" onclick="syncAgora()" title="Sincronizar com a nuvem (busca a base mais recente e envia as alterações deste aparelho)">🔄 Sincronizar</button>
     <select id="selEmp" onchange="trocarEmpresa(this.value)" title="Trocar de empresa" style="max-width:210px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--card2);color:var(--tx);font-weight:700;font-size:13px"></select>
     <button class="btn sm" id="btnSair" onclick="sair()" style="display:none" title="Sair da conta">⏻ Sair</button>
     <div class="saldo-pill"><span class="cloud-dot" id="cloudDot"></span>Saldo caixa: <b id="tSaldo">R$ 0,00</b></div>
@@ -1647,33 +1648,39 @@ async function pubMsg(txt){
   const r=await fetch('https://ntfy.sh/'+TOPIC,{method:'POST',body:txt});
   return r.ok;
 }
+async function publicaAgora(){
+  if(!TOPIC)return;
+  try{
+    // payload ENXUTO: só o essencial (bkps/_lastPull/logo estouram o limite de 4KB do ntfy)
+    const payload={eventos:DB.eventos||[],caixa:DB.caixa||[],seq:DB.seq||1,cfg:{...(DB.cfg||{})}};
+    if(payload.cfg)delete payload.cfg.logo;
+    const t=Date.now();
+    const env=JSON.stringify({t:t,db:payload});
+    if(env.length<3600){
+      await pubMsg(env); // cabe em 1 mensagem (formato antigo, compatível)
+    }else if(window.CompressionStream){
+      const cs=new CompressionStream('gzip');
+      const stream=new Blob([env]).stream().pipeThrough(cs);
+      const buf=new Uint8Array(await new Response(stream).arrayBuffer());
+      let bin='';for(const b of buf)bin+=String.fromCharCode(b);
+      const gz=btoa(bin);
+      const CH=2800;const n=Math.ceil(gz.length/CH);
+      for(let i=0;i<n;i++){
+        await pubMsg(JSON.stringify({t:t,i:i,n:n,c:gz.substr(i*CH,CH)}));
+        await new Promise(r=>setTimeout(r,250));
+      }
+    }
+    document.getElementById('cloudDot').classList.add('on');
+  }catch(e){}
+}
 function pubDB(){
   if(!TOPIC)return;
   clearTimeout(window._pubT);
-  window._pubT=setTimeout(async()=>{
-    try{
-      // payload ENXUTO: só o essencial (bkps/_lastPull/logo estouram o limite de 4KB do ntfy)
-      const payload={eventos:DB.eventos||[],caixa:DB.caixa||[],seq:DB.seq||1,cfg:{...(DB.cfg||{})}};
-      if(payload.cfg)delete payload.cfg.logo;
-      const t=Date.now();
-      const env=JSON.stringify({t:t,db:payload});
-      if(env.length<3600){
-        await pubMsg(env); // cabe em 1 mensagem (formato antigo, compatível)
-      }else if(window.CompressionStream){
-        const cs=new CompressionStream('gzip');
-        const stream=new Blob([env]).stream().pipeThrough(cs);
-        const buf=new Uint8Array(await new Response(stream).arrayBuffer());
-        let bin='';for(const b of buf)bin+=String.fromCharCode(b);
-        const gz=btoa(bin);
-        const CH=2800;const n=Math.ceil(gz.length/CH);
-        for(let i=0;i<n;i++){
-          await pubMsg(JSON.stringify({t:t,i:i,n:n,c:gz.substr(i*CH,CH)}));
-          await new Promise(r=>setTimeout(r,250));
-        }
-      }
-      document.getElementById('cloudDot').classList.add('on');
-    }catch(e){}
-  },2500);
+  window._pubT=setTimeout(publicaAgora,2500);
+}
+function syncAgora(){
+  toast('Sincronizando com a nuvem...','ok');
+  publicaAgora().then(()=>pullDB(true)).then(()=>toast('Sincronizado — base unificada','ok'));
 }
 function pullDB(forcar){
   if(!TOPIC)return;
@@ -1995,6 +2002,10 @@ window.addEventListener('DOMContentLoaded',()=>{
   if(window.__convite)toast('Empresa "'+window.__convite+'" adicionada neste aparelho — sincronizando...','ok');
   if(precisaLogin()&&!getSessao())abreLogin();
   initTheme();
+  // app instalável com auto-atualização: service worker network-first (sempre a versão nova quando há internet)
+  if('serviceWorker' in navigator&&location.protocol==='https:'){
+    navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  }
   if(TOPIC){pullDB();setInterval(pullDB,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){pullDB();pubDB()}})}
   // NUVEM-FIRST: se tem planilha Google, ela e a fonte da verdade
   if(SHEET){cloudFirst(); setInterval(cloudFirst,30000)}
