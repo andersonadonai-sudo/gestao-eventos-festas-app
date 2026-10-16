@@ -382,7 +382,7 @@ th.stik,th.stikL{z-index:3}
 </main>
 
 <!-- modal evento -->
-<div class="modal-bg" id="mEv">
+<div class="modal-bg" id="mEv" style="z-index:200">
   <div class="modal">
     <h3 id="mEvTitle">Novo evento</h3>
     <div class="frow">
@@ -446,6 +446,31 @@ th.stik,th.stikL{z-index:3}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- modal editar lançamento -->
+<div class="modal-bg" id="mCxED" style="z-index:400">
+  <div class="modal">
+    <h3 id="cxEdTitle">Editar lançamento</h3>
+    <div class="frow">
+      <div style="max-width:150px"><label>Data</label><input type="date" id="cxData"></div>
+      <div style="flex:2"><label>Descrição</label><input id="cxDesc"></div>
+      <div style="max-width:200px"><label>Categoria</label><select id="cxCat"></select></div>
+    </div>
+    <div class="frow">
+      <div style="max-width:130px"><label>D ou C</label><select id="cxDc"><option value="C">C — Crédito</option><option value="D">D — Débito</option></select></div>
+      <div style="max-width:150px"><label>Tipo festa</label><input id="cxTipo" list="dlTipos" placeholder="—"></div>
+      <div><label>Valor (R$)</label><input type="text" id="cxVal" inputmode="numeric" placeholder="0,00" style="text-align:right;font-variant-numeric:tabular-nums"></div>
+    </div>
+    <div class="frow">
+      <div style="max-width:180px"><label>Nº Registro (evento)</label><input id="cxReg" list="dlReg" placeholder="EV-0001"></div>
+      <div style="max-width:220px"><label>Conta (origem/destino)</label><select id="cxConta"></select></div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">
+      <button class="btn" onclick="fecha('mCxED')">Cancelar</button>
+      <button class="btn p" onclick="salvarEdicaoCaixa()">Salvar alterações</button>
+    </div>
+  </div>
+</div>
 
 <!-- modal login -->
 <div class="modal-bg" id="mLogin" style="z-index:300">
@@ -920,7 +945,7 @@ function verParcelas(id){
     prev.forEach(p=>{h+=`<tr><td>${MESES[+p.mes.split('-')[1]-1]}/${p.mes.split('-')[0]}</td><td class="num">${money(p.val)}</td></tr>`});
     h+='</table>';
   }
-  h+=`<div style="margin-top:12px;display:flex;gap:10px"><button class="btn p" onclick="lancarDoEvento('${id}')">＋ Lançar recebimento no caixa</button><button class="btn" onclick="formEvento('${id}')">✏️ Editar evento</button></div>`;
+  h+=`<div style="margin-top:12px;display:flex;gap:10px"><button class="btn p" onclick="lancarDoEvento('${id}')">＋ Lançar recebimento no caixa</button><button class="btn" onclick="fecha('mParc');formEvento('${id}')">✏️ Editar evento</button></div>`;
   document.getElementById('pTitle').textContent='Parcelas — '+e.cli;
   document.getElementById('pBody').innerHTML=h;
   document.getElementById('mParc').classList.add('on');
@@ -995,6 +1020,41 @@ function salvarCaixa(){
   }else toast('Lançamento salvo','ok');
 }
 function delCaixa(id){if(!confirm('Excluir lançamento?'))return;DB.caixa=DB.caixa.filter(c=>c.id!==id);save();renderAll()}
+let cxEdit=null;
+function editCaixa(id){
+  const sel=document.getElementById('cxCat');
+  sel.innerHTML=CATEGORIAS.map(c=>`<option>${esc(c)}</option>`).join('');
+  const c=DB.caixa.find(x=>x.id===id);if(!c)return;
+  cxEdit=id;
+  document.getElementById('cxEdTitle').textContent='Editar lançamento';
+  document.getElementById('cxData').value=c.data||'';
+  document.getElementById('cxDesc').value=c.desc||'';
+  document.getElementById('cxCat').value=c.cat||'OUTRAS DESPESAS';
+  document.getElementById('cxDc').value=c.dc||'D';
+  document.getElementById('cxTipo').value=c.tipo||'';
+  document.getElementById('cxVal').value=c.val?(+c.val).toLocaleString('pt-BR',{minimumFractionDigits:2}):'';
+  document.getElementById('cxReg').value=c.reg||'';
+  renderContas();
+  document.getElementById('cxConta').value=c.forma||'';
+  document.getElementById('mCxED').classList.add('on');
+}
+function salvarEdicaoCaixa(){
+  const data=document.getElementById('cxData').value;
+  const desc=document.getElementById('cxDesc').value.trim();
+  const cat=document.getElementById('cxCat').value;
+  const dc=document.getElementById('cxDc').value;
+  const val=valorDo(document.getElementById('cxVal'));
+  if(!data||!desc||!cat||!val){toast('Preencha data, descrição, categoria e valor','err');return}
+  const conta=document.getElementById('cxConta').value;
+  if(!conta){toast('Informe a conta (origem/destino)','err');return}
+  const c=DB.caixa.find(x=>x.id===cxEdit);if(!c)return;
+  c.data=data;c.desc=desc;c.cat=cat;c.dc=dc;c.val=val;c.tipo=document.getElementById('cxTipo').value.trim();
+  c.forma=conta;c.reg=document.getElementById('cxReg').value.trim();
+  c.evId=null;
+  if(cat==='RECEITA DE EVENTO'&&dc==='C'&&c.reg){const e=evByReg(c.reg);if(e)c.evId=e.id}
+  save();fecha('mCxED');cxEdit=null;renderAll();
+  toast('Lançamento atualizado','ok');
+}
 function tblCaixa(){
   const el=document.getElementById('tblCaixa');
   const cx=DB.caixa.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')||((b._ts||0)-(a._ts||0)));
@@ -1012,7 +1072,7 @@ function tblCaixa(){
     <td class="num ${c.dc==='C'?'pos':'neg'}">${money(c.val)}</td>
     <td class="num" style="color:var(--mut)">${money(saldos[c.id])}</td>
     <td class="opt">${esc((c.forma||c.conta||'—').toUpperCase())}</td>
-    <td class="stik"><button class="btn sm r" onclick="delCaixa('${c.id}')">✕</button></td></tr>`;
+    <td class="stik" style="white-space:nowrap"><button class="btn sm" onclick="editCaixa('${c.id}')" title="Editar">✏️</button> <button class="btn sm r" onclick="delCaixa('${c.id}')" title="Excluir">✕</button></td></tr>`;
   });
   el.innerHTML=h;
 }
@@ -1324,10 +1384,12 @@ function salvarCfg(){
 /* ================= CONTAS (carteira, pix, banco...) ================= */
 function getContas(){return DB.cfg.contas&&DB.cfg.contas.length?DB.cfg.contas:CONTAS_PADRAO}
 function renderContas(){
-  const sel=document.getElementById('cConta');
-  if(!sel)return;
-  const cs=getContas();
-  sel.innerHTML='<option value="">— selecione —</option>'+cs.map(c=>`<option>${esc(c)}</option>`).join('');
+  ['cConta','cxConta'].forEach(id=>{
+    const sel=document.getElementById(id);
+    if(!sel)return;
+    const cs=getContas();
+    sel.innerHTML='<option value="">— selecione —</option>'+cs.map(c=>`<option>${esc(c)}</option>`).join('');
+  });
 }
 function novaConta(){
   const c=prompt('Nova conta (ex.: PIX NUBANK, CARTEIRA, CAIXA LOJA):');
