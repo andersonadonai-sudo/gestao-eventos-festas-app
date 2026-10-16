@@ -357,7 +357,12 @@ th.stik,th.stikL{z-index:3}
         </div>
         <div style="font-size:14px;color:var(--mut);margin-top:8px;line-height:1.5">OPCIONAL (só se quiser espelhar numa planilha do Google): requer instalar o Apps Script — veja o arquivo <b>codigo-apps-script-gestao-festas.gs</b>. Se não usar planilha, ignore este campo: o código da nuvem acima já resolve tudo.</div>
       </div>
-      <div style="font-size:14px;color:var(--mut);margin-top:8px;line-height:1.5">O código da nuvem sincroniza os dados entre aparelhos (dono ↔ consultor). Use o <b>mesmo código</b> nos dois aparelhos. Precisa do app ntfy ou internet no navegador.</div>
+      <div style="font-size:14px;color:var(--mut);margin-top:8px;line-height:1.5">O código da nuvem sincroniza os dados entre aparelhos (dono ↔ consultor). Use o <b>mesmo código</b> nos dois aparelhos.         <div style="font-size:14px;color:var(--mut);margin-top:8px;line-height:1.5">O código da nuvem sincroniza os dados entre aparelhos (dono ↔ consultor). Use o <b>mesmo código</b> nos dois aparelhos. Precisa do app ntfy ou internet no navegador.</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+          <label>🔗 Convidar alguém para ESTA empresa</label>
+          <div style="font-size:14px;color:var(--mut);margin:6px 0 10px;line-height:1.5">Gera um link que abre o sistema já nesta empresa (dados zerados ou sincronizados pela nuvem) e pede o login que você cadastrou em <b>Usuários</b>. Quem recebe não precisa configurar nada.</div>
+          <button class="btn g" onclick="gerarConvite()">🔗 Copiar link de convite desta empresa</button>
+        </div>
     </div>
     <div class="card acc">
       <h3>📥 Importar / Exportar planilhas</h3>
@@ -644,6 +649,22 @@ function initEmpresas(){
   EMP=l.find(e=>e.id===cur)||l[0];
   localStorage.setItem(CUR,EMP.id);
 }
+/* link de convite: #convite=<base64 {id,nome,topico}> — provisiona a empresa no aparelho */
+(function(){
+  const m=location.hash.match(/convite=([A-Za-z0-9+\/=]+)/);
+  if(!m)return;
+  try{
+    const j=new TextDecoder().decode(Uint8Array.from(atob(m[1]),c=>c.charCodeAt(0)));
+    const c=JSON.parse(j);
+    if(c&&c.id&&c.topico){
+      let l=getEmpresas();
+      if(!l.some(e=>e.id===c.id))l.push({id:c.id,nome:c.nome||c.id,topico:c.topico});
+      setEmpresas(l);localStorage.setItem(CUR,c.id);
+      history.replaceState(null,'',location.pathname+location.search);
+      window.__convite=c.nome||c.id;
+    }
+  }catch(e){}
+})();
 initEmpresas();
 function renderSelEmp(){
   const sel=document.getElementById('selEmp');if(!sel)return;
@@ -1510,8 +1531,16 @@ function pullDB(){
           if(d.db&&d.t>DB._lastPull){
             DB._lastPull=d.t;
             DB.eventos=d.db.eventos||[];DB.caixa=d.db.caixa||[];
+            let topicoMudou=false;
+            if(d.db.cfg&&typeof d.db.cfg==='object'){
+              DB.cfg={...DB.cfg,...d.db.cfg};
+              if((DB.cfg.topico||'')!==TOPIC)topicoMudou=true;
+            }
             localStorage.setItem(LS,JSON.stringify(DB));
             renderAll();
+            if(topicoMudou){TOPIC=DB.cfg.topico;location.reload();return}
+            aplicarAcesso();
+            if(precisaLogin()&&!getSessao())abreLogin();
           }
         }catch(e){}
       });
@@ -1593,6 +1622,18 @@ function novaFreq(){
   renderFreqs();
   document.getElementById('eFreq').value=f.trim().toUpperCase();
   toast('Frequência "'+f.trim().toUpperCase()+'" cadastrada','ok');
+}
+
+/* ================= LINK DE CONVITE ================= */
+function gerarConvite(){
+  const dados={id:EMP.id,nome:DB.cfg.empresa||EMP.nome,topico:TOPIC||DB.cfg.topico||''};
+  if(!dados.topico){toast('Esta empresa não tem código da nuvem — configure um no campo acima primeiro','err');return}
+  const j=JSON.stringify(dados);
+  const b=btoa(String.fromCharCode(...new TextEncoder().encode(j)));
+  const url='https://casaencantada.app.br/#convite='+b;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(()=>toast('Link de convite copiado! Cole no WhatsApp da pessoa','ok')).catch(()=>prompt('Copie o link de convite:',url));
+  }else prompt('Copie o link de convite:',url);
 }
 
 /* ================= GESTÃO DE CADASTROS (Config) ================= */
@@ -1744,6 +1785,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('.modal-bg').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('on')});
   aplicaLogo();
   document.getElementById('loginLogoImg').src=DB.cfg.logo||document.querySelector('#logoImg').src;
+  if(window.__convite)toast('Empresa "'+window.__convite+'" adicionada neste aparelho — sincronizando...','ok');
   if(precisaLogin()&&!getSessao())abreLogin();
   initTheme();
   if(TOPIC){pullDB();setInterval(pullDB,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){pullDB();pubDB()}})}
