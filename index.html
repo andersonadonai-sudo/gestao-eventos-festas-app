@@ -216,7 +216,13 @@ th.stik,th.stikL{z-index:3}
         <div style="max-width:210px"><label>Categoria</label><select id="cCat" onchange="catChange()"></select></div>
         <div style="max-width:150px"><label>Tipo festa</label><input id="cTipo" placeholder="—" list="dlTipos"></div>
         <div style="max-width:140px"><label>D ou C</label><select id="cDC"><option value="C">C — Crédito</option><option value="D">D — Débito</option></select></div>
-        <div style="max-width:140px"><label>Valor (R$)</label><input type="number" id="cVal" step="0.01" min="0" placeholder="0,00"></div>
+        <div style="max-width:140px"><label>Valor (R$)</label><input type="text" id="cVal" inputmode="numeric" placeholder="0,00" style="text-align:right;font-variant-numeric:tabular-nums"></div>
+        <div style="max-width:190px"><label>Conta (origem/destino)</label>
+          <div style="display:flex;gap:6px">
+            <select id="cConta"></select>
+            <button class="btn sm" title="Nova conta" onclick="novaConta()">＋</button>
+          </div>
+        </div>
         <div style="max-width:120px;display:flex;align-items:flex-end"><button class="btn p" style="width:100%" onclick="salvarCaixa()">Lançar</button></div>
       </div>
       <div id="cRegBox" style="display:none">
@@ -493,6 +499,7 @@ function initTheme(){const t=localStorage.getItem('gestao_festas_tema');if(t&&TH
 const LS='gestao_festas_v1';
 let DB={eventos:[],caixa:[],seq:1,cfg:{empresa:'',topico:''},lastSeen:0};
 let FREQS_PADRAO=['MENSAL','15 EM 15 DIAS','SEMANAL','ÚNICO'];
+let CONTAS_PADRAO=['CARTEIRA','PIX','CAIXA','CONTA BANCÁRIA'];
 function load(){try{const r=localStorage.getItem(LS);if(r){const d=JSON.parse(r);DB={...{eventos:[],caixa:[],seq:1,cfg:{}},...d};}}catch(e){}}
 let SHEET='';
 function save(){snapAuto();localStorage.setItem(LS,JSON.stringify(DB));pubDB();sheetPush();}
@@ -747,7 +754,7 @@ function chartMeses(){
 function kfmt(v){return v>=1000?'R$'+(v/1000).toFixed(1).replace('.',',')+'k':money(v)}
 function donutForma(){
   const byF={};
-  DB.caixa.filter(c=>c.dc==='C').forEach(c=>{const f=(c.forma||'—').toUpperCase();byF[f]=(byF[f]||0)+(+c.val||0)});
+  DB.caixa.filter(c=>c.dc==='C').forEach(c=>{const f=(c.forma||c.conta||'—').toUpperCase();byF[f]=(byF[f]||0)+(+c.val||0)});
   const tot=Object.values(byF).reduce((a,b)=>a+b,0);
   const ks=Object.keys(byF).sort((a,b)=>byF[b]-byF[a]);
   if(!tot){document.getElementById('donutForma').innerHTML='<div class="empty">Sem receitas no caixa</div>';return}
@@ -975,7 +982,9 @@ function salvarCaixa(){
       }
     }
   }
-  DB.caixa.push({id:uid(),_ts:Date.now(),data,desc,cat,tipo:document.getElementById('cTipo').value.trim(),dc,val,evId,reg,forma:(DB._formaTemp||'')});
+  const conta=document.getElementById('cConta').value;
+  if(!conta){toast('Informe a conta (origem/destino) — ou cadastre uma nova no ＋','err');return}
+  DB.caixa.push({id:uid(),_ts:Date.now(),data,desc,cat,tipo:document.getElementById('cTipo').value.trim(),dc,val,evId,reg,forma:conta});
   save();
   document.getElementById('cDesc').value='';document.getElementById('cVal').value='';
   document.getElementById('cTipo').value='';
@@ -990,7 +999,7 @@ function tblCaixa(){
   const el=document.getElementById('tblCaixa');
   const cx=DB.caixa.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')||((b._ts||0)-(a._ts||0)));
   if(!cx.length){el.innerHTML='<tr><td><div class="empty">Caixa vazio. Lance a primeira movimentação acima.</div></td></tr>';return}
-  let h='<tr><th>Data</th><th>Descrição</th><th class="opt">Categoria</th><th class="opt">Tipo festa</th><th>Registro</th><th>D/C</th><th class="num">Valor</th><th class="num">Saldo</th><th class="stik"></th></tr>';
+  let h='<tr><th>Data</th><th>Descrição</th><th class="opt">Categoria</th><th class="opt">Tipo festa</th><th>Registro</th><th>D/C</th><th class="opt">Conta</th><th class="num">Valor</th><th class="num">Saldo</th><th class="stik"></th></tr>';
   // saldo acumulado em ordem cronológica
   const ord=DB.caixa.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   let s=0;const saldos={};
@@ -1002,6 +1011,7 @@ function tblCaixa(){
     <td><span class="badge ${c.dc==='C'?'b-grn':'b-red'}">${c.dc}</span></td>
     <td class="num ${c.dc==='C'?'pos':'neg'}">${money(c.val)}</td>
     <td class="num" style="color:var(--mut)">${money(saldos[c.id])}</td>
+    <td class="opt">${esc((c.forma||c.conta||'—').toUpperCase())}</td>
     <td class="stik"><button class="btn sm r" onclick="delCaixa('${c.id}')">✕</button></td></tr>`;
   });
   el.innerHTML=h;
@@ -1222,7 +1232,7 @@ function expXlsx(){
   let s=0;
   DB.caixa.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||'')).forEach(c=>{
     s+=c.dc==='D'?-(+c.val||0):(+c.val||0);
-    cx.push([c.data,c.desc,c.cat,c.tipo||'',c.reg||'',c.dc,c.val,s]);
+    cx.push([c.data,c.desc,c.cat,c.tipo||'',c.reg||'',c.dc,(c.forma||c.conta||''),c.val,s]);
   });
   cx.push(['','Observação:','Digite o valor sempre positivo na coluna Valor. Informe D para débito ou C para crédito; o Saldo calcula o efeito acumulado.','','','','','','']);
   const wb=XLSX.utils.book_new();
@@ -1309,6 +1319,24 @@ function salvarCfg(){
   else{DB.cfg.topico=novoT;save()}
   document.getElementById('tEmpresa').textContent=DB.cfg.empresa||'Casa Encantada Eventos';
   toast('Configurações salvas','ok');
+}
+
+/* ================= CONTAS (carteira, pix, banco...) ================= */
+function getContas(){return DB.cfg.contas&&DB.cfg.contas.length?DB.cfg.contas:CONTAS_PADRAO}
+function renderContas(){
+  const sel=document.getElementById('cConta');
+  if(!sel)return;
+  const cs=getContas();
+  sel.innerHTML='<option value="">— selecione —</option>'+cs.map(c=>`<option>${esc(c)}</option>`).join('');
+}
+function novaConta(){
+  const c=prompt('Nova conta (ex.: PIX NUBANK, CARTEIRA, CAIXA LOJA):');
+  if(!c)return;
+  const cs=getContas();
+  if(!cs.includes(c.trim().toUpperCase())){DB.cfg.contas=[...cs,c.trim().toUpperCase()];save()}
+  renderContas();
+  document.getElementById('cConta').value=c.trim().toUpperCase();
+  toast('Conta "'+c.trim().toUpperCase()+'" cadastrada','ok');
 }
 
 /* ================= MÁSCARA DE MOEDA (centavos) ================= */
@@ -1418,6 +1446,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   renderAll();
   // seed automatico REMOVIDO: zerou fica em branco de verdade (exemplos so via botao no Config)
   document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>navGo(b.dataset.s));
+  renderContas();
   ['eVal','cVal'].forEach(id=>{const el=document.getElementById(id);if(el){el.addEventListener('input',()=>maskMoeda(el));el.setAttribute('type','text');el.setAttribute('inputmode','numeric');el.setAttribute('placeholder','0,00');el.style.textAlign='right'}});
   document.querySelectorAll('.modal-bg').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('on')});
   aplicaLogo();
@@ -1439,7 +1468,7 @@ function seed(){
   const pg4={id:uid(),data:'2026-05-10',desc:'Parcela casamento JOSÉ DA SILVA',cat:'RECEITA DE EVENTO',tipo:'Casamento',dc:'C',val:2000,evId:j.id,reg:'EV-0001',forma:'PIX'};
   const pg5={id:uid(),data:'2026-06-05',desc:'Parcela casamento JOSÉ DA SILVA',cat:'RECEITA DE EVENTO',tipo:'Casamento',dc:'C',val:2000,evId:j.id,reg:'EV-0001',forma:'PIX'};
   const pg6={id:uid(),data:'2026-07-02',desc:'Parcela casamento JOSÉ DA SILVA',cat:'RECEITA DE EVENTO',tipo:'Casamento',dc:'C',val:4000,evId:j.id,reg:'EV-0001',forma:'PIX'};
-  const desp={id:uid(),data:'2026-08-15',desc:'Compra decoração casamento Silva',cat:'DESPESA COM EVENTO',tipo:'Casamento',dc:'D',val:1500,forma:''};
+  const desp={id:uid(),data:'2026-08-15',desc:'Compra decoração casamento Silva',cat:'DESPESA COM EVENTO',tipo:'Casamento',dc:'D',val:1500,forma:'CARTEIRA'};
   DB.caixa.push(pg1,pg2,pg3,pg4,pg5,pg6,desp);
   save();
 }
