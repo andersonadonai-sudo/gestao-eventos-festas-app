@@ -1537,7 +1537,11 @@ function pullDB(){
               if((DB.cfg.topico||'')!==TOPIC)topicoMudou=true;
             }
             localStorage.setItem(LS,JSON.stringify(DB));
+            const le=getEmpresas(),ie=le.findIndex(e=>e.id===EMP.id);
+            if(ie>=0&&DB.cfg.empresa&&le[ie].nome!==DB.cfg.empresa){le[ie].nome=DB.cfg.empresa;setEmpresas(le);renderSelEmp()}
             renderAll();
+            aplicaLogo();
+            const lli=document.getElementById('loginLogoImg');if(lli)lli.src=DB.cfg.logo||document.getElementById('logoImg').src;
             if(topicoMudou){TOPIC=DB.cfg.topico;location.reload();return}
             aplicarAcesso();
             if(precisaLogin()&&!getSessao())abreLogin();
