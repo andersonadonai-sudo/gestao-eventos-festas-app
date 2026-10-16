@@ -1059,7 +1059,7 @@ function tblCaixa(){
   const el=document.getElementById('tblCaixa');
   const cx=DB.caixa.slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')||((b._ts||0)-(a._ts||0)));
   if(!cx.length){el.innerHTML='<tr><td><div class="empty">Caixa vazio. Lance a primeira movimentação acima.</div></td></tr>';return}
-  let h='<tr><th>Data</th><th>Descrição</th><th class="opt">Categoria</th><th class="opt">Tipo festa</th><th>Registro</th><th>D/C</th><th class="opt">Conta</th><th class="num">Valor</th><th class="num">Saldo</th><th class="stik"></th></tr>';
+  let h='<tr><th>Data</th><th>Descrição</th><th class="opt">Categoria</th><th class="opt">Tipo festa</th><th>Registro</th><th>D/C</th><th class="num">Valor</th><th class="num">Saldo</th><th class="opt">Conta</th><th class="stik"></th></tr>';
   // saldo acumulado em ordem cronológica
   const ord=DB.caixa.slice().sort((a,b)=>(a.data||'').localeCompare(b.data||''));
   let s=0;const saldos={};
