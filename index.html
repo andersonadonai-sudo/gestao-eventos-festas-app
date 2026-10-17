@@ -585,6 +585,11 @@ th.stik,th.stikL{z-index:3}
 function usuarios(){return DB.cfg.usuarios||[]}
 function getSessao(){try{return JSON.parse(sessionStorage.getItem('gestao_festas_sessao'))}catch(e){return null}}
 function precisaLogin(){return usuarios().length>0||!!DB.cfg.senha}
+function loginBloqueia(){
+  // bloqueia entrada se a empresa tem usuários cadastrados (login individual) OU senha geral
+  const us=DB.cfg.usuarios||[];
+  return us.length>0||!!DB.cfg.senha;
+}
 function abreLogin(){
   const us=usuarios();
   const m=document.getElementById('mLogin');
@@ -644,6 +649,10 @@ function aplicarAcesso(){
   const comum=s&&precisaLogin()&&!s.adm;
   if(cfgBtn)cfgBtn.style.display=comum?'none':'';
   if(comum&&document.getElementById('s-cfg').classList.contains('on'))navGo('dash');
+  // TRAVINHA: sem sessão válida, o conteúdo fica bloqueado atrás do login
+  const travado=loginBloqueia()&&!s;
+  document.querySelectorAll('.screen').forEach(x=>x.style.visibility=travado?'hidden':'visible');
+  document.getElementById('selEmp').style.visibility=travado?'hidden':'visible';
 }
 function cfgUsersRender(){
   const el=document.getElementById('cfgUsers');if(!el)return;
@@ -789,8 +798,8 @@ function renderSelEmp(){
 function trocarEmpresa(id){
   if(id==='__nova'){novaEmpresa();return}
   if(id===EMP.id)return;
+  // TRAVINHA: trocar de empresa SEMPRE exige login da empresa nova (sessão não atravessa empresas)
   sessionStorage.removeItem('gestao_festas_sessao');
-  // empresa do catálogo ainda sem base local: provisiona vazia (dados/usuários chegam pela nuvem da empresa)
   if(!localStorage.getItem('gestao_festas_v1_'+id)){
     const l=getEmpresas();const e=l.find(x=>x.id===id);
     localStorage.setItem('gestao_festas_v1_'+id,JSON.stringify({eventos:[],caixa:[],seq:1,cfg:{empresa:(e&&e.nome)||id,topico:(e&&e.topico)||''}}));
