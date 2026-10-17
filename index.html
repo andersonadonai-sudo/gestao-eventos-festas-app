@@ -280,16 +280,18 @@ th.stik,th.stikL{z-index:3}
       <div class="frow">
         <div style="max-width:170px"><label>Orientação</label><select id="relOrient"><option value="retrato">Retrato</option><option value="paisagem">Paisagem</option></select></div>
         <div style="max-width:170px"><label>Período do caixa</label>
-          <select id="relPeriodo" onchange="document.getElementById('relDatas').style.display=this.value==='periodo'?'flex':'none'">
-            <option value="mes">Mês atual</option><option value="ano">Ano atual</option><option value="tudo">Tudo</option><option value="periodo">Período específico…</option>
+          <select id="relPeriodo" onchange="relPeriodoChange()">
+            <option value="mes">Mês atual</option><option value="ano">Ano atual</option><option value="tudo">Tudo</option><option value="mesEsp">Mês específico…</option><option value="periodo">Período específico…</option>
           </select></div>
+        <div id="relMesEsp" style="display:none;max-width:170px"><label>Mês/ano</label><select id="relMesSel"></select></div>
         <div id="relDatas" style="display:none;gap:8px;align-items:flex-end">
           <div><label>De</label><input type="date" id="relDe"></div>
           <div><label>Até</label><input type="date" id="relAte"></div>
         </div>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn p" onclick="imprimirRel()">🖨️ Imprimir / PDF</button>
+        <button class="btn p" onclick="aplicarRel()">🔍 Aplicar filtro</button>
+        <button class="btn" onclick="imprimirRel()">🖨️ Imprimir / PDF</button>
         <button class="btn g" onclick="excelRel()">⬇️ Excel (.xlsx)</button>
       </div>
     </div>
@@ -386,6 +388,7 @@ th.stik,th.stikL{z-index:3}
         <div style="max-width:220px"><label>Código da nuvem (sync) ★ principal</label><input id="cfgTopico" placeholder="casaencantada2026"></div>
         <div style="max-width:220px"><label>Código da REDE (seus aparelhos)</label><input id="cfgRede" placeholder="ex.: anderson-rede-2026"></div>
         <div style="max-width:180px"><label>Senha de acesso</label><input id="cfgSenha" inputmode="numeric" maxlength="8" placeholder="ex.: 1234"></div>
+        <div style="max-width:220px"><label>E-mail do admin (solicitações de acesso)</label><input id="cfgAdminEmail" placeholder="admin@empresa.com"></div>
       </div>
       <button class="btn p" onclick="salvarCfg()">Salvar</button>
       <div style="font-size:14px;color:var(--grn);margin-top:8px;font-weight:700">✅ JÁ ESTÁ CONFIGURADO com o código <b>casaencantada2026</b> — dono e consultor só abrem o link e tudo aparece nos dois. Se preferir outro código, troque aqui (e use o mesmo em todos os aparelhos).</div>
@@ -563,6 +566,7 @@ th.stik,th.stikL{z-index:3}
     <input type="password" id="loginPass" placeholder="••••" style="text-align:center;font-size:20px;letter-spacing:4px" onkeydown="if(event.key==='Enter')tentaLogin()">
     <div id="loginErr" style="color:var(--red);font-size:13px;margin-top:8px;display:none">Senha incorreta</div>
     <button class="btn p" style="width:100%;margin-top:14px;justify-content:center" onclick="tentaLogin()">Entrar</button>
+    <div id="loginLinks" style="display:flex;gap:12px;justify-content:center;margin-top:12px;font-size:13px;flex-wrap:wrap"></div>
   </div>
 </div>
 <script>
@@ -582,6 +586,12 @@ function abreLogin(){
   document.getElementById('loginSub').textContent=us.length?'Quem está entrando? Digite a senha':'Digite a senha para entrar';
   document.getElementById('loginErr').style.display='none';
   document.getElementById('loginPass').value=passAntes;
+  const lk=document.getElementById('loginLinks');
+  let lh='';
+  if(us.length)lh+='<a href="#" onclick="esqueciSenha();return false" style="color:var(--mut)">🆘 Esqueci minha senha</a>';
+  if(DB.cfg.adminEmail)lh+='<a href="#" onclick="cadastrarSe();return false" style="color:var(--mut)">➕ Cadastre-se</a>';
+  if(us.length&&!us.some(x=>x.adm))lh+='<a href="#" onclick="sosAdmin();return false" style="color:var(--red);font-weight:700">🔑 Recuperar administrador (SOS)</a>';
+  lk.innerHTML=lh;
   m.classList.add('on');
   setTimeout(()=>document.getElementById(us.length?'loginPass':'loginPass').focus(),200);
 }
@@ -645,8 +655,10 @@ function userForm(i){
   if(!p)return;
   nome=prompt('Nome (aparece no botão Sair):',i==null?'':(us[i].nome||''));
   if(nome==null)return;
+  const email=prompt('E-mail (para recuperar a senha — opcional):',i==null?'':(us[i].email||''));
+  if(email==null)return;
   adm=confirm('Este usuário é ADMIN?\n\nOK = admin (vê o Config e gerencia usuários)\nCancelar = comum (usa o sistema, sem Config)');
-  const obj={u:u,p:p,nome:nome.trim(),adm:adm};
+  const obj={u:u,p:p,nome:nome.trim(),adm:adm,email:email.trim()};
   if(i==null)DB.cfg.usuarios=[...us,obj];else{const v=us.slice();v[i]=obj;DB.cfg.usuarios=v}
   save();cfgUsersRender();aplicarAcesso();
   toast('Usuário "'+obj.u+'" salvo','ok');
@@ -1072,7 +1084,7 @@ function alertas(){
   DB.eventos.forEach(e=>{
     if(e.festa&&e.festa<hoje&&e.falta>0.005)A.push({t:'red',m:`<b>${esc(e.cli)}</b> — festa já realizada (${fmtD(e.festa)}) e ainda falta receber <b>${money(e.falta)}</b>`});
     if(!e.reg)A.push({t:'org',m:`Evento de <b>${esc(e.cli)}</b> sem Nº de registro — os pagamentos no caixa não vão encontrar o contrato`});
-    if(e.festa&&e.festa>=hoje&&e.falta>0.005&&e.festa.slice(0,7)===hoje.slice(0,7))A.push({t:'org',m:`<b>${esc(e.cli)}</b> tem festa em ${fmtD(e.festa)} e falta <b>${money(e.falta)}</b> — cobrar antes`});
+    if(e.festa&&e.festa>=hoje&&e.falta>0.005&&e.festa.slice(0,7)===hoje.slice(0,7))A.push({t:'org',m:`<b>${esc(e.cli)}</b> tem festa em ${fmtD(e.festa)} e falta <b>${money(e.falta)}</b> — cobrar antes${e.tel?` <a href="https://wa.me/55${String(e.tel).replace(/\D/g,'')}" target="_blank" style="color:var(--grn);font-weight:700">💬 WhatsApp</a> · <a href="tel:${esc(e.tel)}" style="color:var(--vio);font-weight:700">📞 Ligar</a>`:''}`});
   });
   const semReg=DB.caixa.filter(c=>c.cat==='RECEITA DE EVENTO'&&!c.evId&&c.dc==='C');
   if(semReg.length)A.push({t:'org',m:`${semReg.length} receita(s) de evento no caixa <b>sem registro vinculado</b> (${money(semReg.reduce((a,c)=>a+(+c.val||0),0))}) — edite o lançamento e informe o Nº`});
@@ -1373,21 +1385,46 @@ function excelRel(){
   sel.forEach(r=>{
     const tb=document.getElementById(r.id);
     if(!tb)return;
-    const rows=[...tb.querySelectorAll('tr')].map(tr=>[...tr.querySelectorAll('th,td')].map(td=>{
-      let t=td.innerText.trim();
-      const num=t.replace(/[R$\s.]/g,'').replace(',','.');
-      return (/^-?\d+(\.\d+)?$/.test(num)&&t.includes('R$'))?parseFloat(num):t;
-    }));
-    if(rows.length)wbs.push({nome:r.nome,rows:rows});
+    const rows=[[r.nome]]; // linha 1: título do relatório
+    rows.push([]); // linha 2 vazia
+    [...tb.querySelectorAll('tr')].forEach((tr,i)=>{
+      const cells=[...tr.querySelectorAll('th,td')].map(td=>{
+        let t=td.innerText.trim();
+        const num=t.replace(/[R$\s.]/g,'').replace(',','.');
+        return (/^-?\d+(\.\d+)?$/.test(num)&&t.includes('R$'))?parseFloat(num):t;
+      });
+      rows.push(cells);
+    });
+    if(rows.length>2)wbs.push({nome:r.nome,rows:rows});
   });
   if(!wbs.length){toast('Nada para exportar','err');return}
   const wb=XLSX.utils.book_new();
   wbs.forEach(w=>{
     const ws=XLSX.utils.aoa_to_sheet(w.rows);
+    // larguras de coluna: max 40, min 10
+    const larguras={};
+    w.rows.forEach(r=>r.forEach((c,j)=>{const l=Math.min(40,Math.max(10,String(c==null?'':c).length+2));larguras[j]=Math.max(larguras[j]||10,l)}));
+    ws['!cols']=Object.keys(larguras).map(k=>({wch:larguras[k]}));
+    // área da tabela com grade + formato de número 0,00 + negrito no título e cabeçalho
+    const range=XLSX.utils.decode_range(ws['!ref']);
+    const hdrRow=2; // linha 0=título, 1=vazia, 2=cabeçalho
+    for(let R=2;R<=range.e.r;R++)for(let C=range.s.c;C<=range.e.c;C++){
+      const addr=XLSX.utils.encode_cell({r:R,c:C});
+      const cell=ws[addr];
+      if(!cell)continue;
+      if(typeof cell.v==='number'){cell.t='n';cell.z='#,##0.00;[Red]-#,##0.00'}
+      cell.s=cell.s||{};
+      cell.s.border={top:{style:'thin',color:{rgb:'999999'}},bottom:{style:'thin',color:{rgb:'999999'}},left:{style:'thin',color:{rgb:'999999'}},right:{style:'thin',color:{rgb:'999999'}}};
+      if(R===hdrRow){cell.s.font={bold:true};cell.s.fill={fgColor:{rgb:'EEEEEE'}}}
+    }
+    const t0=ws['A1'];if(t0){t0.s={font:{bold:true,sz:14}}}
+    // 1 página de largura ao imprimir
+    ws['!margins']={left:0.3,right:0.3,top:0.5,bottom:0.5};
+    ws['!fitToPage']=true;ws['!fitToWidth']=1;ws['!fitToHeight']=0;
     XLSX.utils.book_append_sheet(wb,ws,w.nome.slice(0,31));
   });
   XLSX.writeFile(wb,'relatorios-'+today()+'.xlsx');
-  toast('Excel gerado — '+wbs.length+' aba(s)','ok');
+  toast('Excel gerado — '+wbs.length+' aba(s) formatada(s)','ok');
 }
 
 /* ================= AGENDA ================= */
@@ -1422,11 +1459,28 @@ function renderAgenda(){
 }
 
 /* ================= RELATÓRIOS ================= */
+function relPeriodoChange(){
+  const m=document.getElementById('relPeriodo').value;
+  document.getElementById('relDatas').style.display=m==='periodo'?'flex':'none';
+  document.getElementById('relMesEsp').style.display=m==='mesEsp'?'block':'none';
+  if(m==='mesEsp'){const s=document.getElementById('relMesSel');const atual=s.value;popularMeses();if(atual)s.value=atual}
+}
+function popularMeses(){
+  const s=document.getElementById('relMesSel');if(!s)return;
+  const ms=[...new Set(DB.caixa.map(c=>(c.data||'').slice(0,7)))].filter(Boolean).sort().reverse();
+  s.innerHTML=ms.map(m=>`<option value="${m}">${MESES[+m.split('-')[1]-1]}/${m.split('-')[0]}</option>`).join('');
+}
+function aplicarRel(){
+  relCaixa();
+  document.getElementById('r7Periodo').textContent=document.getElementById('r7Periodo').textContent+' — filtro aplicado';
+  toast('Filtro aplicado — o relatório em tela já reflete o período','ok');
+}
 function periodoCaixa(){
   const m=document.getElementById('relPeriodo').value;
   const cx=DB.caixa.map(c=>c.data||'').sort();
   if(m==='mes'){const h=today().slice(0,7);return [h+'-01',h+'-31']}
   if(m==='ano'){const a=today().slice(0,4);return [a+'-01-01',a+'-12-31']}
+  if(m==='mesEsp'){const mm=document.getElementById('relMesSel').value||today().slice(0,7);return [mm+'-01',mm+'-31']}
   if(m==='periodo'){const de=document.getElementById('relDe').value||'0000-01-01';const ate=document.getElementById('relAte').value||'9999-12-31';return [de,ate]}
   return ['0000-01-01','9999-12-31'];
 }
@@ -1684,7 +1738,6 @@ async function publicaAgora(){
   try{
     // payload ENXUTO: só o essencial (bkps/_lastPull/logo estouram o limite de 4KB do ntfy)
     const payload={eventos:DB.eventos||[],caixa:DB.caixa||[],seq:DB.seq||1,cfg:{...(DB.cfg||{})}};
-    if(payload.cfg)delete payload.cfg.logo;
     const t=Date.now();
     const env=JSON.stringify({t:t,db:payload});
     if(env.length<3600){
@@ -1785,7 +1838,14 @@ async function aplicarNuvem(t,s){
     const ganhou=(depois.eventos>antes.eventos||depois.caixa>antes.caixa);
     let topicoMudou=false;
     if(db.cfg&&typeof db.cfg==='object'){
-      DB.cfg={...DB.cfg,...db.cfg};
+      const localCfg={...DB.cfg};
+      DB.cfg={...localCfg,...db.cfg};
+      // usuários: UNIÃO por login — o sync NUNCA mais apaga um usuário cadastrado
+      const lu=localCfg.usuarios||[],ru=db.cfg.usuarios||[];
+      const umap=new Map();
+      const qtd=(o)=>Object.keys(o).filter(k=>o[k]).length;
+      [...lu,...ru].forEach(u=>{const k=(u.u||'').toLowerCase();const cur=umap.get(k);if(!cur||qtd(u)>=qtd(cur))umap.set(k,u)});
+      if(umap.size)DB.cfg.usuarios=[...umap.values()];
       if((DB.cfg.topico||'')!==TOPIC)topicoMudou=true;
     }
     localStorage.setItem(LS,JSON.stringify(DB));
@@ -1811,6 +1871,7 @@ function salvarCfg(){
   SHEET=document.getElementById('cfgSheet').value.trim();
   DB.cfg.sheet=SHEET;
   DB.cfg.senha=document.getElementById('cfgSenha').value.trim();
+  DB.cfg.adminEmail=document.getElementById('cfgAdminEmail').value.trim();
   const novoT=document.getElementById('cfgTopico').value.trim();
   if(novoT!==TOPIC){TOPIC=novoT;DB.cfg.topico=novoT;DB._lastPull=0;save();pullDB()}
   const l=getEmpresas();const ix=l.findIndex(e=>e.id===EMP.id);
@@ -1966,6 +2027,44 @@ function gerarConvite(){
   }else prompt('Copie o link de convite:',url);
 }
 
+/* ================= RECUPERAÇÃO DE ACESSO ================= */
+function esqueciSenha(){
+  const us=usuarios();
+  if(!us.length){toast('Esta empresa ainda não tem usuários cadastrados','err');return}
+  const em=prompt('Digite o SEU e-mail cadastrado:');
+  if(!em)return;
+  const u=us.find(x=>(x.email||'').toLowerCase()===em.trim().toLowerCase());
+  if(!u){toast('E-mail não encontrado nos cadastros desta empresa','err');return}
+  toast('Enviando... (1º envio: confirme o e-mail de ativação que chega)','ok');
+  fetch('https://formsubmit.co/ajax/'+encodeURIComponent(u.email),{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({subject:'Acesso — '+(DB.cfg.empresa||EMP.nome),message:'Seu acesso ao sistema\n\nEmpresa: '+(DB.cfg.empresa||EMP.nome)+'\nLogin: '+u.u+'\nSenha: '+u.p+'\n\nLink: https://casaencantada.app.br'})})
+  .then(r=>r.json()).then(j=>toast(j.success?'Enviado! Confira o e-mail (e o spam)':'Não foi possível enviar — peça ao administrador',j.success?'ok':'err'))
+  .catch(()=>toast('Falha no envio — peça ao administrador','err'));
+}
+function cadastrarSe(){
+  const al=DB.cfg.adminEmail;
+  if(!al){toast('Esta empresa não tem e-mail de administrador configurado','err');return}
+  const nome=prompt('Seu nome completo:');if(!nome)return;
+  const tel=prompt('Telefone/WhatsApp:');if(!tel)return;
+  const em=prompt('Seu e-mail:');if(!em)return;
+  const login=prompt('Login desejado (uma palavra):');if(!login)return;
+  toast('Enviando solicitação...','ok');
+  fetch('https://formsubmit.co/ajax/'+encodeURIComponent(al),{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({subject:'Solicitação de acesso — '+(DB.cfg.empresa||EMP.nome),message:'NOVO ACESSO SOLICITADO\n\nNome: '+nome+'\nContato: '+tel+'\nE-mail: '+em+'\nLogin desejado: '+login+'\n\nPara liberar: Config > Usuários > Incluir usuário'})})
+  .then(r=>r.json()).then(j=>toast(j.success?'Solicitação enviada! O administrador vai avaliar':'Não foi possível enviar',j.success?'ok':'err'))
+  .catch(()=>toast('Falha no envio','err'));
+}
+function sosAdmin(){
+  const c=prompt('Digite o CÓDIGO DA NUVEM desta empresa (está no Config, no aparelho do dono):');
+  if(!c)return;
+  if(c.trim()!==TOPIC){toast('Código incorreto','err');return}
+  const u=prompt('Novo login de administrador:');if(!u)return;
+  const p=prompt('Senha (mín. 4 caracteres):');if(!p||p.trim().length<4)return;
+  const nome=prompt('Seu nome:',u.trim());
+  DB.cfg.usuarios=[...(DB.cfg.usuarios||[]),{u:u.trim().toLowerCase(),p:p.trim(),nome:(nome||u).trim(),adm:true}];
+  save();toast('Administrador recuperado! Entre com ele agora','ok');abreLogin();
+}
+
 /* ================= GESTÃO DE CADASTROS (Config) ================= */
 const CFG_LISTAS={
   cats:{get:()=>CATEGORIAS.slice(),set:v=>{CATEGORIAS.length=0;CATEGORIAS.push(...v);DB.cfg.categorias=v.slice()}},
@@ -2078,7 +2177,7 @@ function renderAll(){
   calcEventos();
   kpis();chartMeses();donutForma();proxEventos();tblTipos();alertas();
   tblEventos();tblCaixa();
-  renderAgenda();relatorios();relCaixa();renderBkps();
+  renderAgenda();relatorios();relCaixa();popularMeses();renderBkps();
   // datalists
   document.getElementById('dlReg').innerHTML=DB.eventos.map(e=>`<option value="${esc(e.reg)}">${esc(e.cli)} — ${fmtD(e.festa)} — falta ${money(e.falta)}</option>`).join('');
   const tipos=[...new Set(DB.eventos.map(e=>e.tipo).filter(Boolean))];
@@ -2103,6 +2202,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   SHEET=DB.cfg.sheet||'';
   document.getElementById('cfgSheet').value=SHEET;
   document.getElementById('cfgSenha').value=DB.cfg.senha||'';
+  document.getElementById('cfgAdminEmail').value=DB.cfg.adminEmail||'';
   document.getElementById('cData').value=today();
   document.getElementById('cCat').innerHTML=CATEGORIAS.map(c=>`<option>${c}</option>`).join('');
   catChange();
