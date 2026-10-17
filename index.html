@@ -555,6 +555,18 @@ th.stik,th.stikL{z-index:3}
   </div>
 </div>
 
+<!-- modal definir nova senha -->
+<div class="modal-bg" id="mReset" style="z-index:420">
+  <div class="modal" style="max-width:380px;text-align:center">
+    <h3>🔑 Definir nova senha</h3>
+    <div style="font-size:14px;color:var(--mut);margin-bottom:10px" id="resetWho"></div>
+    <input type="password" id="resetP1" placeholder="nova senha (mín. 4)" style="text-align:center;font-size:18px;margin-bottom:8px">
+    <input type="password" id="resetP2" placeholder="confirmar nova senha" style="text-align:center;font-size:18px">
+    <div id="resetErr" style="color:var(--red);font-size:13px;margin-top:8px;display:none">As senhas não conferem (ou muito curtas)</div>
+    <button class="btn p" style="width:100%;margin-top:14px;justify-content:center" onclick="salvarReset()">Definir senha</button>
+  </div>
+</div>
+
 <!-- modal login -->
 <div class="modal-bg" id="mLogin" style="z-index:300">
   <div class="modal" style="max-width:380px;text-align:center">
@@ -744,11 +756,10 @@ function initEmpresas(){
 }
 /* link de convite: #convite=<base64 {id,nome,topico}> — provisiona a empresa no aparelho */
 (function(){
+  const dec=(s)=>{try{return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(s),c=>c.charCodeAt(0))))}catch(e){return null}};
   const m=(location.hash+' '+location.search).match(/convite=([A-Za-z0-9+\/=]+)/);
-  if(!m)return;
-  try{
-    const j=new TextDecoder().decode(Uint8Array.from(atob(m[1]),c=>c.charCodeAt(0)));
-    const c=JSON.parse(j);
+  if(m){
+    const c=dec(m[1]);
     if(c&&c.id&&c.topico){
       let l=getEmpresas();
       if(!l.some(e=>e.id===c.id))l.push({id:c.id,nome:c.nome||c.id,topico:c.topico});
@@ -756,7 +767,17 @@ function initEmpresas(){
       history.replaceState(null,'',location.pathname+location.search);
       window.__convite=c.nome||c.id;
     }
-  }catch(e){}
+  }
+  const mr=(location.hash+' '+location.search).match(/reset=([A-Za-z0-9+\/=]+)/);
+  if(mr){
+    const c=dec(mr[1]);
+    if(c&&c.id&&c.topico&&c.u&&c.t){
+      let l=getEmpresas();
+      if(!l.some(e=>e.id===c.id))l.push({id:c.id,nome:c.nome||c.id,topico:c.topico});
+      setEmpresas(l);localStorage.setItem(CUR,c.id);
+      window.__reset=c; // hash fica até concluir, pra recarregar não perder
+    }
+  }
 })();
 initEmpresas();
 function renderSelEmp(){
@@ -2035,10 +2056,21 @@ function esqueciSenha(){
   if(!em)return;
   const u=us.find(x=>(x.email||'').toLowerCase()===em.trim().toLowerCase());
   if(!u){toast('E-mail não encontrado nos cadastros desta empresa','err');return}
-  toast('Enviando... (1º envio: confirme o e-mail de ativação que chega)','ok');
+  // senha temporária: já vale no aparelho atual e sincroniza pros outros
+  const temp=Math.random().toString(36).slice(2,10);
+  const v=us.slice();const ix=v.findIndex(x=>x.u===u.u);v[ix]={...u,p:temp};DB.cfg.usuarios=v;
+  save();
+  const dados={id:EMP.id,nome:DB.cfg.empresa||EMP.nome,topico:TOPIC||DB.cfg.topico||'',u:u.u,t:temp};
+  const b=btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(dados))));
+  const link='https://casaencantada.app.br/#reset='+b;
+  const msg='RECUPERAÇÃO DE ACESSO — '+dados.nome+'\n\n'+
+    'Sua senha TEMPORÁRIA: '+temp+'\n\n'+
+    'Para DEFINIR UMA NOVA SENHA, abra este link:\n'+link+'\n\n'+
+    'Ou entre direto com o login '+u.u+' e a senha temporária.';
+  toast('Enviando... ATENÇÃO: no 1º e-mail deste endereço, o serviço manda uma ATIVAÇÃO em inglês — clique no botão de ativar UMA vez. Depois os e-mails chegam direto em português.','ok');
   fetch('https://formsubmit.co/ajax/'+encodeURIComponent(u.email),{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({subject:'Acesso — '+(DB.cfg.empresa||EMP.nome),message:'Seu acesso ao sistema\n\nEmpresa: '+(DB.cfg.empresa||EMP.nome)+'\nLogin: '+u.u+'\nSenha: '+u.p+'\n\nLink: https://casaencantada.app.br'})})
-  .then(r=>r.json()).then(j=>toast(j.success?'Enviado! Confira o e-mail (e o spam)':'Não foi possível enviar — peça ao administrador',j.success?'ok':'err'))
+    body:JSON.stringify({subject:'Recuperação de acesso — '+(DB.cfg.empresa||EMP.nome),message:msg})})
+  .then(r=>r.json()).then(j=>toast(j.success?'Enviado! Confira o e-mail (e o spam) — nele tem a senha temporária e o link pra definir a nova':'Não foi possível enviar — peça ao administrador',j.success?'ok':'err'))
   .catch(()=>toast('Falha no envio — peça ao administrador','err'));
 }
 function cadastrarSe(){
@@ -2053,6 +2085,24 @@ function cadastrarSe(){
     body:JSON.stringify({subject:'Solicitação de acesso — '+(DB.cfg.empresa||EMP.nome),message:'NOVO ACESSO SOLICITADO\n\nNome: '+nome+'\nContato: '+tel+'\nE-mail: '+em+'\nLogin desejado: '+login+'\n\nPara liberar: Config > Usuários > Incluir usuário'})})
   .then(r=>r.json()).then(j=>toast(j.success?'Solicitação enviada! O administrador vai avaliar':'Não foi possível enviar',j.success?'ok':'err'))
   .catch(()=>toast('Falha no envio','err'));
+}
+function salvarReset(){
+  const p1=document.getElementById('resetP1').value;
+  const p2=document.getElementById('resetP2').value;
+  const err=document.getElementById('resetErr');
+  if(!p1||p1.length<4||p1!==p2){err.style.display='block';return}
+  err.style.display='none';
+  const c=window.__reset;if(!c)return;
+  const us=DB.cfg.usuarios||[];
+  const ix=us.findIndex(x=>(x.u||'').toLowerCase()===String(c.u).toLowerCase());
+  if(ix>=0)us[ix]={...us[ix],p:p1};
+  else us.push({u:String(c.u).toLowerCase(),p:p1,nome:String(c.u),adm:false,email:''});
+  DB.cfg.usuarios=us;
+  save();fecha('mReset');
+  history.replaceState(null,'',location.pathname+location.search);
+  window.__reset=null;
+  toast('Nova senha definida! Entre com ela agora','ok');
+  abreLogin();
 }
 function sosAdmin(){
   const c=prompt('Digite o CÓDIGO DA NUVEM desta empresa (está no Config, no aparelho do dono):');
@@ -2223,6 +2273,14 @@ window.addEventListener('DOMContentLoaded',()=>{
   aplicaLogo();
   document.getElementById('loginLogoImg').src=DB.cfg.logo||document.querySelector('#logoImg').src;
   if(window.__convite)toast('Empresa "'+window.__convite+'" adicionada neste aparelho — sincronizando...','ok');
+  if(window.__reset){
+    const c=window.__reset;
+    const us=DB.cfg.usuarios||[];
+    const ix=us.findIndex(x=>(x.u||'').toLowerCase()===String(c.u).toLowerCase());
+    if(ix>=0&&us[ix].p!==c.t){us[ix]={...us[ix],p:c.t};DB.cfg.usuarios=us;save()} // garante a temporária neste aparelho
+    document.getElementById('resetWho').textContent='Para o usuário "'+c.u+'" da empresa '+(c.nome||c.id);
+    document.getElementById('mReset').classList.add('on');
+  }
   if(precisaLogin()&&!getSessao())abreLogin();
   initTheme();
   // app instalável com auto-atualização: service worker network-first (sempre a versão nova quando há internet)
