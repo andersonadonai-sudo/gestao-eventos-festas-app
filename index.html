@@ -790,6 +790,11 @@ function trocarEmpresa(id){
   if(id==='__nova'){novaEmpresa();return}
   if(id===EMP.id)return;
   sessionStorage.removeItem('gestao_festas_sessao');
+  // empresa do catálogo ainda sem base local: provisiona vazia (dados/usuários chegam pela nuvem da empresa)
+  if(!localStorage.getItem('gestao_festas_v1_'+id)){
+    const l=getEmpresas();const e=l.find(x=>x.id===id);
+    localStorage.setItem('gestao_festas_v1_'+id,JSON.stringify({eventos:[],caixa:[],seq:1,cfg:{empresa:(e&&e.nome)||id,topico:(e&&e.topico)||''}}));
+  }
   localStorage.setItem(CUR,id);location.reload();
 }
 function novaEmpresa(){
@@ -805,6 +810,7 @@ function novaEmpresa(){
   localStorage.setItem(CUR,id);
   sessionStorage.removeItem('gestao_festas_sessao');
   anunciarRede(l[l.length-1]); // espelha nos outros aparelhos da rede
+  try{fetch('https://ntfy.sh/'+CATALOGO,{method:'POST',body:JSON.stringify({t:Date.now(),emp:{id:l[l.length-1].id,nome:l[l.length-1].nome,topico:l[l.length-1].topico||''}})})}catch(e){}
   location.reload();
 }
 
@@ -1988,6 +1994,36 @@ function colarConvite(){
   }catch(e){toast('Convite inválido','err')}
 }
 
+/* ================= CATÁLOGO PÚBLICO DE EMPRESAS ================= */
+const CATALOGO='gev-catalogo-2026';
+function anunciarCatalogo(){
+  if(!CATALOGO)return;
+  getEmpresas().forEach(e=>{
+    try{fetch('https://ntfy.sh/'+CATALOGO,{method:'POST',body:JSON.stringify({t:Date.now(),emp:{id:e.id,nome:e.nome,topico:e.topico||''}})})}catch(err){}
+  });
+}
+function pullCatalogo(){
+  if(!CATALOGO)return;
+  fetch('https://ntfy.sh/'+CATALOGO+'/json?poll=1&since=all')
+    .then(r=>r.text())
+    .then(raw=>{
+      let mudou=false;
+      String(raw).split('\n').forEach(l=>{
+        l=l.trim();if(!l)return;
+        let o=null;try{o=JSON.parse(l)}catch(e){return}
+        if(!o||!o.message)return;
+        let d=null;try{d=JSON.parse(o.message)}catch(e){return}
+        if(!d||!d.emp||!d.emp.id||!d.emp.topico)return;
+        const lista=getEmpresas();
+        if(!lista.some(e=>e.id===d.emp.id)){
+          lista.push({id:d.emp.id,nome:d.emp.nome||d.emp.id,topico:d.emp.topico});
+          setEmpresas(lista);mudou=true;
+        }
+      });
+      if(mudou&&EMP&&EMP.id)renderSelEmp();
+    }).catch(()=>{});
+}
+
 /* ================= REDE DO GESTOR (espelha lista de empresas entre os aparelhos do dono) ================= */
 let REDE='';
 function anunciarRede(emp){
@@ -2033,6 +2069,7 @@ function renomearEmpresa(){
   document.getElementById('tEmpresa').textContent=n.trim();
   const cf=document.getElementById('cfgEmpresa');if(cf)cf.value=n.trim();
   anunciarRede({id:EMP.id,nome:n.trim(),topico:TOPIC||DB.cfg.topico||''});
+  try{fetch('https://ntfy.sh/'+CATALOGO,{method:'POST',body:JSON.stringify({t:Date.now(),emp:{id:EMP.id,nome:n.trim(),topico:TOPIC||DB.cfg.topico||''}})})}catch(e){}
   toast('Renomeada para "'+n.trim()+'" — sincroniza nos outros aparelhos','ok');
 }
 
@@ -2288,6 +2325,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   }
   if(TOPIC){pullDB();setInterval(pullDB,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){pullDB();pubDB()}})}
   if(REDE){pullRede();setInterval(pullRede,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)pullRede()})}
+  anunciarCatalogo();setTimeout(anunciarCatalogo,2500);pullCatalogo();setInterval(pullCatalogo,60000);
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){anunciarCatalogo();pullCatalogo()}});
   // NUVEM-FIRST: se tem planilha Google, ela e a fonte da verdade
   if(SHEET){cloudFirst(); setInterval(cloudFirst,30000)}
 });
