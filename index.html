@@ -2064,13 +2064,12 @@ function esqueciSenha(){
   const b=btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(dados))));
   const link='https://casaencantada.app.br/#reset='+b;
   const msg='RECUPERAÇÃO DE ACESSO — '+dados.nome+'\n\n'+
-    'Sua senha TEMPORÁRIA: '+temp+'\n\n'+
-    'Para DEFINIR UMA NOVA SENHA, abra este link:\n'+link+'\n\n'+
-    'Ou entre direto com o login '+u.u+' e a senha temporária.';
+    'Para definir sua NOVA SENHA, abra este link (válido para o login '+u.u+'):\n'+link+'\n\n'+
+    'O acesso atual foi bloqueado até você definir a nova senha pelo link acima.';
   toast('Enviando... ATENÇÃO: no 1º e-mail deste endereço, o serviço manda uma ATIVAÇÃO em inglês — clique no botão de ativar UMA vez. Depois os e-mails chegam direto em português.','ok');
   fetch('https://formsubmit.co/ajax/'+encodeURIComponent(u.email),{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({subject:'Recuperação de acesso — '+(DB.cfg.empresa||EMP.nome),message:msg})})
-  .then(r=>r.json()).then(j=>toast(j.success?'Enviado! Confira o e-mail (e o spam) — nele tem a senha temporária e o link pra definir a nova':'Não foi possível enviar — peça ao administrador',j.success?'ok':'err'))
+  .then(r=>r.json()).then(j=>toast(j.success?'Enviado! Confira o e-mail (e o spam) — nele tem o link pra definir sua nova senha':'Não foi possível enviar — peça ao administrador',j.success?'ok':'err'))
   .catch(()=>toast('Falha no envio — peça ao administrador','err'));
 }
 function cadastrarSe(){
