@@ -617,7 +617,7 @@ function abreLogin(){
   box.innerHTML=us.length?('<select id="loginSel" onchange="pickUser(this.value)" style="width:100%;max-width:280px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--tx);font-size:15px;text-align:center">'+us.map(x=>`<option value="${esc(x.u)}">${esc(x.nome||x.u)}</option>`).join('')+'</select>'):'';
   box.style.display=us.length?'block':'none';
   document.getElementById('loginUser').style.display='none';
-  document.getElementById('loginSub').textContent=us.length?'Quem está entrando? Digite a senha':'Digite a senha para entrar';
+  document.getElementById('loginSub').textContent=ls.length>1?'Escolha a empresa, o usuário e digite a senha':(us.length?'Quem está entrando? Digite a senha':'Digite a senha para entrar');
   document.getElementById('loginErr').style.display='none';
   document.getElementById('loginPass').value=passAntes;
   const lk=document.getElementById('loginLinks');
