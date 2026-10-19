@@ -1,5 +1,5 @@
 /* Service Worker — Gestão de Eventos: network-first (sempre a versão nova quando há internet; cache só como fallback offline) */
-const CACHE='gev-cache-v1';
+const CACHE='gev-cache-v2';
 self.addEventListener('install',e=>{self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(self.clients.claim())});
 self.addEventListener('fetch',e=>{

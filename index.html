@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Casa Encantada — Gestão de Eventos</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🎉</text></svg>">
+<title>Gestão de Eventos & Festas</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🏰</text></svg>">
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{
@@ -382,6 +382,12 @@ th.stik,th.stikL{z-index:3}
       </div>
     </div>
     <div class="card">
+      <h3>🏢 Empresas deste aparelho</h3>
+      <div style="font-size:14px;color:var(--mut);margin-bottom:8px;line-height:1.5">Excluir aqui remove a empresa DESTE aparelho e avisa os outros (some do seletor de todos). Os DADOS da empresa continuam salvos no aparelho onde foram criados — não são apagados. A excluída não volta pelo catálogo.</div>
+      <div id="cfgEmps"></div>
+      <button class="btn sm p" onclick="novaEmpresa()" style="margin-top:8px">＋ Cadastrar nova empresa</button>
+    </div>
+    <div class="card">
       <h3>Empresa</h3>
       <div class="frow">
         <div><label>Nome da empresa</label><input id="cfgEmpresa" placeholder="Nome do cliente / empresa de festas"></div>
@@ -573,6 +579,10 @@ th.stik,th.stikL{z-index:3}
     <div style="width:72px;height:72px;margin:0 auto 10px;border-radius:50%;overflow:hidden;background:#111" id="loginLogo"><img id="loginLogoImg" src="" style="width:100%;height:100%;object-fit:cover" alt=""></div>
     <h3 style="margin-bottom:4px" id="loginTitle">Casa Encantada Eventos</h3>
     <div style="font-size:14px;color:var(--mut);margin-bottom:10px" id="loginSub">Entre com usuário e senha</div>
+    <div id="loginEmpBox" style="margin-bottom:10px">
+      <div style="font-size:12px;color:var(--mut);margin-bottom:4px;text-align:left">QUAL EMPRESA VOCÊ VAI ACESSAR?</div>
+      <select id="loginEmp" onchange="loginEmpTrocou(this.value)" style="width:100%;max-width:280px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--tx);font-size:15px;text-align:center"></select>
+    </div>
     <div id="loginUsers" style="display:none;margin-bottom:10px"></div>
     <input type="text" id="loginUser" placeholder="usuário" autocomplete="username" style="text-align:center;font-size:16px;margin-bottom:8px;display:none" onkeydown="if(event.key==='Enter')tentaLogin()">
     <input type="password" id="loginPass" placeholder="••••" style="text-align:center;font-size:20px;letter-spacing:4px" onkeydown="if(event.key==='Enter')tentaLogin()">
@@ -594,7 +604,14 @@ function abreLogin(){
   const us=usuarios();
   const m=document.getElementById('mLogin');
   const passAntes=document.getElementById('loginPass').value;
-  document.getElementById('loginTitle').textContent=DB.cfg.empresa||EMP.nome||'Gestão de Eventos';
+  document.getElementById('loginTitle').textContent='Gestão de Eventos & Festas';
+  // SELETOR DE EMPRESA: escolhe a empresa JÁ na tela de login
+  const eb=document.getElementById('loginEmpBox');
+  const ls=getEmpresas().filter(e=>!EMP_DEL.includes(e.id));
+  const sel=document.getElementById('loginEmp');
+  sel.innerHTML=ls.map(e=>`<option value="${esc(e.id)}">${esc(e.nome||e.id)}</option>`).join('');
+  sel.value=ls.some(e=>e.id===EMP.id)?EMP.id:(ls[0]&&ls[0].id);
+  eb.style.display=ls.length>1?'block':'none';
   const box=document.getElementById('loginUsers');
   // select FECHADO: mostra só o nome completo (o login fica oculto por segurança)
   box.innerHTML=us.length?('<select id="loginSel" onchange="pickUser(this.value)" style="width:100%;max-width:280px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card2);color:var(--tx);font-size:15px;text-align:center">'+us.map(x=>`<option value="${esc(x.u)}">${esc(x.nome||x.u)}</option>`).join('')+'</select>'):'';
@@ -610,6 +627,7 @@ function abreLogin(){
   if(us.length&&!us.some(x=>x.adm))lh+='<a href="#" onclick="sosAdmin();return false" style="color:var(--red);font-weight:700">🔑 Recuperar administrador (SOS)</a>';
   lk.innerHTML=lh;
   m.classList.add('on');
+  aplicarAcesso();
   setTimeout(()=>document.getElementById(us.length?'loginPass':'loginPass').focus(),200);
 }
 function pickUser(u){
@@ -617,6 +635,15 @@ function pickUser(u){
   if(sel)sel.value=u;
   document.getElementById('loginUser').value=u;
   document.getElementById('loginPass').focus();
+}
+function loginEmpTrocou(id){
+  if(!id||id===EMP.id)return;
+  sessionStorage.removeItem('gestao_festas_sessao');
+  if(!localStorage.getItem('gestao_festas_v1_'+id)){
+    const l=getEmpresas();const e=l.find(x=>x.id===id);
+    localStorage.setItem('gestao_festas_v1_'+id,JSON.stringify({eventos:[],caixa:[],seq:1,cfg:{empresa:(e&&e.nome)||id,topico:(e&&e.topico)||''}}));
+  }
+  localStorage.setItem(CUR,id);location.reload();
 }
 function tentaLogin(){
   const us=usuarios();
@@ -629,6 +656,9 @@ function tentaLogin(){
     if(f)sess={u:f.u,nome:f.nome||f.u,adm:!!f.adm};
   }else if(p===DB.cfg.senha){sess={u:'dono',nome:'Dono',adm:true}}
   if(sess){
+    // se o login escolheu OUTRA empresa no seletor, entra nela (travinha mantida)
+    const le=document.getElementById('loginEmp');
+    if(le&&le.value&&le.value!==EMP.id){loginEmpTrocou(le.value);return}
     sessionStorage.setItem('gestao_festas_sessao',JSON.stringify(sess));
     document.getElementById('mLogin').classList.remove('on');
     document.getElementById('loginPass').value='';document.getElementById('loginUser').value='';
@@ -652,7 +682,8 @@ function aplicarAcesso(){
   // TRAVINHA: sem sessão válida, o conteúdo fica bloqueado atrás do login
   const travado=loginBloqueia()&&!s;
   document.querySelectorAll('.screen').forEach(x=>x.style.visibility=travado?'hidden':'visible');
-  document.getElementById('selEmp').style.visibility=travado?'hidden':'visible';
+  const se=document.getElementById('selEmp');
+  if(se)se.style.visibility=(travado&&!document.getElementById('mLogin').classList.contains('on'))?'hidden':'visible';
 }
 function cfgUsersRender(){
   const el=document.getElementById('cfgUsers');if(!el)return;
@@ -791,9 +822,9 @@ function initEmpresas(){
 initEmpresas();
 function renderSelEmp(){
   const sel=document.getElementById('selEmp');if(!sel)return;
-  const l=getEmpresas();
-  sel.innerHTML=l.map(e=>`<option value="${esc(e.id)}">${esc(e.nome)}</option>`).join('')+'<option value="__nova">＋ Nova empresa…</option>';
-  sel.value=EMP.id;
+  const l=getEmpresas().filter(e=>!EMP_DEL.includes(e.id));
+  sel.innerHTML=l.map(e=>`<option value="${esc(e.id)}">${esc(e.nome)}</option>`).join('')+'<option value="__nova">＋ Cadastrar Nova Empresa…</option>';
+  if(l.some(e=>e.id===EMP.id))sel.value=EMP.id;
 }
 function trocarEmpresa(id){
   if(id==='__nova'){novaEmpresa();return}
@@ -807,6 +838,18 @@ function trocarEmpresa(id){
   localStorage.setItem(CUR,id);location.reload();
 }
 function novaEmpresa(){
+  const del=getEmpresas().filter(e=>EMP_DEL.includes(e.id));
+  if(del.length){
+    const lst='Empresas excluídas neste aparelho (digite o NÚMERO para restaurar, ou cancele):\n'+del.map((e,i)=>(i+1)+'. '+e.nome).join('\n');
+    const r=prompt(lst);
+    if(r&&/^[0-9]+$/.test(r.trim())&&+r.trim()>=1&&+r.trim()<=del.length){
+      const e=del[+r.trim()-1];
+      EMP_DEL=EMP_DEL.filter(x=>x!==e.id);salvarEmpDel();
+      let l2=getEmpresas();if(!l2.some(x=>x.id===e.id)){l2.push(e);setEmpresas(l2)}
+      cfgEmpRender();renderSelEmp();
+      toast('Empresa "'+e.nome+'" restaurada','ok');return;
+    }
+  }
   const nome=prompt('Nome da NOVA empresa (ex.: Festas & Sonhos):');
   if(!nome||!nome.trim())return;
   const l=getEmpresas();
@@ -2005,10 +2048,17 @@ function colarConvite(){
 
 /* ================= CATÁLOGO PÚBLICO DE EMPRESAS ================= */
 const CATALOGO='gev-catalogo-2026';
+let EMP_DEL=[];try{EMP_DEL=JSON.parse(localStorage.getItem('gestao_festas_emp_del')||'[]')}catch(e){EMP_DEL=[]}
+if(!Array.isArray(EMP_DEL))EMP_DEL=[];
+function salvarEmpDel(){localStorage.setItem('gestao_festas_emp_del',JSON.stringify(EMP_DEL))}
 function anunciarCatalogo(){
   if(!CATALOGO)return;
   getEmpresas().forEach(e=>{
+    if(EMP_DEL.includes(e.id))return;
     try{fetch('https://ntfy.sh/'+CATALOGO,{method:'POST',body:JSON.stringify({t:Date.now(),emp:{id:e.id,nome:e.nome,topico:e.topico||''}})})}catch(err){}
+  });
+  EMP_DEL.forEach(id=>{
+    try{fetch('https://ntfy.sh/'+CATALOGO,{method:'POST',body:JSON.stringify({t:Date.now(),del:id})})}catch(err){}
   });
 }
 function pullCatalogo(){
@@ -2022,8 +2072,18 @@ function pullCatalogo(){
         let o=null;try{o=JSON.parse(l)}catch(e){return}
         if(!o||!o.message)return;
         let d=null;try{d=JSON.parse(o.message)}catch(e){return}
+        if(d.del){ // outro aparelho excluiu esta empresa: remove aqui também
+          if(!EMP_DEL.includes(d.del)){
+            EMP_DEL.push(d.del);salvarEmpDel();
+            const l2=getEmpresas().filter(e=>e.id!==d.del);setEmpresas(l2);
+            if(EMP&&EMP.id===d.del){localStorage.setItem(CUR,(l2[0]&&l2[0].id)||'');location.reload()}
+            else if(EMP&&EMP.id){renderSelEmp();toast('Empresa "'+(d.del)+'" excluída da rede','ok')}
+          }
+          return;
+        }
         if(!d||!d.emp||!d.emp.id||!d.emp.topico)return;
         const lista=getEmpresas();
+        if(EMP_DEL.includes(d.emp.id))return; // excluída neste aparelho: NÃO volta pelo catálogo
         if(!lista.some(e=>e.id===d.emp.id)){
           lista.push({id:d.emp.id,nome:d.emp.nome||d.emp.id,topico:d.emp.topico});
           setEmpresas(lista);mudou=true;
@@ -2054,6 +2114,7 @@ function pullRede(forcar){
         if(!o||!o.message)return;
         let d=null;try{d=JSON.parse(o.message)}catch(e){return}
         if(!d||!d.emp||!d.emp.id)return;
+        if(EMP_DEL.includes(d.emp.id))return;
         const lista=getEmpresas();
         if(!lista.some(e=>e.id===d.emp.id)){
           lista.push({id:d.emp.id,nome:d.emp.nome||d.emp.id,topico:d.emp.topico||''});
@@ -2167,6 +2228,28 @@ const CFG_LISTAS={
   contas:{get:()=>getContas(),set:v=>{DB.cfg.contas=v.slice()}}
 };
 const CFG_CAMPOS={cats:'cCat',tipos:'cTipo',contas:'cConta'};
+function cfgEmpRender(){
+  const el=document.getElementById('cfgEmps');if(!el)return;
+  const ls=getEmpresas().filter(e=>!EMP_DEL.includes(e.id));
+  el.innerHTML=ls.length?('<table style="margin:0">'+ls.map(e=>`<tr><td>${esc(e.nome||e.id)}</td><td style="width:76px;text-align:right;white-space:nowrap">${e.id===EMP.id?'<span style="color:var(--grn);font-size:12px;font-weight:700">ABERTA</span>':''} <button class="btn sm r" onclick="excluirEmpresa('${esc(e.id)}')" title="Excluir deste aparelho">✕</button></td></tr>`).join('')+'</table>'):'<div class="empty">nenhuma</div>';
+}
+function excluirEmpresa(id){
+  const l=getEmpresas();const e=l.find(x=>x.id===id);if(!e)return;
+  const nome=e.nome||id;
+  if(!confirm('Excluir a empresa "'+nome+'" DESTE aparelho?\n\nEla some do seletor aqui e nos outros aparelhos. Os DADOS dela continuam salvos no aparelho onde foram criados.\n\nPara desfazer: use o link de convite dela ou "＋ Cadastrar nova empresa" com o mesmo nome e código da nuvem.'))return;
+  if(id===EMP.id){
+    const rest=l.filter(x=>x.id!==id);
+    EMP_DEL.push(id);salvarEmpDel();setEmpresas(rest);
+    try{fetch('https://ntfy.sh/'+CATALOGO,{method:'POST',body:JSON.stringify({t:Date.now(),del:id})})}catch(err){}
+    localStorage.setItem(CUR,(rest[0]&&rest[0].id)||'');
+    location.reload();return;
+  }
+  EMP_DEL.push(id);salvarEmpDel();
+  setEmpresas(l.filter(x=>x.id!==id));
+  try{fetch('https://ntfy.sh/'+CATALOGO,{method:'POST',body:JSON.stringify({t:Date.now(),del:id})})}catch(err){}
+  cfgEmpRender();renderSelEmp();
+  toast('Empresa "'+nome+'" excluída — some nos outros aparelhos em até 1 min','ok');
+}
 function cfgRender(){
   const cont={cats:'cfgCats',tipos:'cfgTipos',contas:'cfgContas'};
   const ondeUso={cats:'caixa (categoria)',tipos:'eventos e caixa (tipo)',contas:'caixa (conta)'};
@@ -2175,6 +2258,7 @@ function cfgRender(){
     const itens=CFG_LISTAS[k].get();
     el.innerHTML=itens.length?('<table style="margin:0">'+itens.map((it,i)=>`<tr><td>${esc(it)}</td><td style="width:76px;text-align:right;white-space:nowrap"><button class="btn sm" onclick="cfgEdit('${k}',${i})" title="Alterar">✏️</button> <button class="btn sm r" onclick="cfgDel('${k}',${i})" title="Excluir">✕</button></td></tr>`).join('')+'</table>'):'<div class="empty">vazio</div>';
   });
+  cfgEmpRender();
 }
 function cfgAdd(k){
   const nome=k==='cats'?'categoria':(k==='tipos'?'tipo de evento':'conta (ex.: PIX NUBANK)');
@@ -2309,6 +2393,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   renderContas();
   cfgRender();
   cfgUsersRender();
+  cfgEmpRender();
   relChecksRender();
   renderSelEmp();
   document.getElementById('selEmp').value=EMP.id;
@@ -2327,6 +2412,19 @@ window.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('mReset').classList.add('on');
   }
   if(precisaLogin()&&!getSessao())abreLogin();
+  // seletor de empresa no login: sincroniza quando o catálogo/rede traz empresas novas
+  window.__loginEmpSync=setInterval(()=>{
+    const m=document.getElementById('mLogin');
+    if(!m||!m.classList.contains('on'))return;
+    const ls=getEmpresas().filter(e=>!EMP_DEL.includes(e.id));
+    const sel=document.getElementById('loginEmp');if(!sel)return;
+    const cur=sel.value;
+    if(ls.length&&ls.some(e=>e.id===cur)){
+      const html2=ls.map(e=>`<option value="${esc(e.id)}">${esc(e.nome||e.id)}</option>`).join('');
+      if(sel.innerHTML!==html2){sel.innerHTML=html2;sel.value=cur}
+      document.getElementById('loginEmpBox').style.display=ls.length>1?'block':'none';
+    }
+  },5000);
   initTheme();
   // app instalável com auto-atualização: service worker network-first (sempre a versão nova quando há internet)
   if('serviceWorker' in navigator&&location.protocol==='https:'){
